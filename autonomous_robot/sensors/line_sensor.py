@@ -143,7 +143,9 @@ class LineSensor:
             'speed': 80,             # 속도 (0-100)
             'line_position': line_position.value,
             'sensor_values': (left, center, right),
-            'confidence': 1.0        # 명령 신뢰도 (0.0-1.0)
+            'confidence': 1.0,       # 명령 신뢰도 (0.0-1.0)
+            'timestamp': time.time(), # 타임스탬프 추가
+            'enhanced': False        # 기본 센서임을 표시
         }
         
         # 라인 위치에 따른 주행 명령 결정

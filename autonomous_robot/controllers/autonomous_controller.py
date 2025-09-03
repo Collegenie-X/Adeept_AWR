@@ -22,6 +22,7 @@ from ..sensors.line_sensor import LineSensor, LinePosition
 from ..sensors.ultrasonic_sensor import UltrasonicSensor, ObstacleLevel
 from ..actuators.motor_controller import MotorController
 from ..actuators.led_controller import LEDController, RobotState
+from ..utils.rotary_handler import EnhancedRotaryLineSensor
 
 
 class AutonomousMode(Enum):
@@ -53,6 +54,9 @@ class AutonomousController:
         self.ultrasonic_sensor = UltrasonicSensor()
         self.motor_controller = MotorController()
         self.led_controller = LEDController()
+        
+        # 로타리 전용 개선 센서 (기본 센서 기반)
+        self.enhanced_line_sensor = None
         
         # 제어 파라미터
         self.default_speed = 80            # 기본 주행 속도
@@ -97,6 +101,18 @@ class AutonomousController:
         
         if all_success:
             print("모든 컴포넌트 초기화 완료")
+            
+            # 로타리 개선 센서 초기화
+            try:
+                self.enhanced_line_sensor = EnhancedRotaryLineSensor(
+                    self.line_sensor, 
+                    analyzer_window_size=15
+                )
+                print("  로타리 개선 센서: 성공")
+            except Exception as e:
+                print(f"  로타리 개선 센서: 실패 ({e})")
+                self.enhanced_line_sensor = None
+            
             # LED 시작 시퀀스 실행
             self.led_controller.show_startup_sequence()
             self.led_controller.set_robot_state(RobotState.IDLE)
@@ -195,8 +211,11 @@ class AutonomousController:
     
     def _collect_sensor_data(self) -> Dict[str, Any]:
         """센서 데이터 수집"""
-        # 라인 센서 데이터
-        line_command = self.line_sensor.get_driving_direction()
+        # 라인 센서 데이터 (로타리 개선 센서 우선 사용)
+        if self.enhanced_line_sensor:
+            line_command = self.enhanced_line_sensor.get_enhanced_driving_direction()
+        else:
+            line_command = self.line_sensor.get_driving_direction()
         
         # 초음파 센서 데이터
         distance = self.ultrasonic_sensor.get_distance_with_history()
@@ -207,7 +226,9 @@ class AutonomousController:
             'line_sensor': {
                 'command': line_command,
                 'position': line_command['line_position'],
-                'sensor_values': line_command['sensor_values']
+                'sensor_values': line_command['sensor_values'],
+                'enhanced': line_command.get('enhanced', False),
+                'rotary_info': line_command.get('rotary_info', {})
             },
             'ultrasonic_sensor': {
                 'distance': distance,
