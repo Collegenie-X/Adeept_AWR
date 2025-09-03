@@ -86,7 +86,23 @@ sudo usermod -a -G gpio $USER
 
 ### 기본 실행
 ```bash
-python3 main.py
+python3 main.py  # 메인 자율주행 프로그램 실행
+```
+
+### 하드웨어 테스트 실행
+각 하드웨어 컴포넌트의 동작을 개별적으로 테스트하려면 다음 명령어를 사용하세요:
+```bash
+# 기어 모터 테스트
+python3 hardware/test_gear_motors.py
+
+# 초음파 센서 테스트
+python3 hardware/test_ultrasonic_sensor.py
+
+# 라인 센서 테스트
+python3 hardware/test_line_sensors.py
+
+# 서보 모터 테스트
+python3 hardware/test_servo_motors.py
 ```
 
 ### 제어 명령어
