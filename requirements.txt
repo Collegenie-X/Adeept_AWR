@@ -1,0 +1,23 @@
+# 라즈베리파이 자율주행 로봇 의존성 라이브러리
+# 설치 방법: pip3 install -r requirements.txt
+
+# GPIO 제어 (라즈베리파이 필수)
+RPi.GPIO>=0.7.0
+
+# WS2812 LED 스트립 제어
+rpi_ws281x>=4.3.0
+
+# PCA9685 서보 모터 제어 (선택적)
+adafruit-circuitpython-pca9685>=3.4.0
+
+# 부저 제어를 위한 PWM (선택적)
+# 내장 RPi.GPIO PWM 사용
+
+# 타입 힌트 (Python 3.7 이하에서 필요시)
+typing_extensions>=3.10.0
+
+# 개발 및 테스트용 라이브러리 (선택적)
+# pytest>=6.0.0
+# pytest-cov>=2.10.0
+# black>=21.0.0
+# flake8>=3.8.0
