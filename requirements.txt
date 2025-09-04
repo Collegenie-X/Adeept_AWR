@@ -1,23 +1,97 @@
-# 라즈베리파이 자율주행 로봇 의존성 라이브러리
-# 설치 방법: pip3 install -r requirements.txt
+# Adeept AWR 자율주행 로봇 의존성 라이브러리
+# 자동 설치: sudo python3 setup.py
+# 수동 설치: pip3 install -r requirements.txt
+
+# ============ 필수 라이브러리 (Core Dependencies) ============
 
 # GPIO 제어 (라즈베리파이 필수)
 RPi.GPIO>=0.7.0
 
-# WS2812 LED 스트립 제어
-rpi_ws281x>=4.3.0
+# 수치 계산 및 배열 처리
+numpy>=1.21.0
 
-# PCA9685 서보 모터 제어 (선택적)
-adafruit-circuitpython-pca9685>=3.4.0
-
-# 부저 제어를 위한 PWM (선택적)
-# 내장 RPi.GPIO PWM 사용
-
-# 타입 힌트 (Python 3.7 이하에서 필요시)
+# 타입 힌트 지원 (Python 3.7 호환성)
 typing_extensions>=3.10.0
 
-# 개발 및 테스트용 라이브러리 (선택적)
-# pytest>=6.0.0
-# pytest-cov>=2.10.0
-# black>=21.0.0
-# flake8>=3.8.0
+# ============ 하드웨어 제어 라이브러리 ============
+
+# WS2812 LED 스트립 제어 (16개 LED)
+rpi_ws281x>=4.3.0
+
+# PCA9685 PWM 서보모터 제어 (16채널)
+adafruit-pca9685>=1.0.1
+adafruit-circuitpython-pca9685>=3.4.0
+
+# I2C/SPI 통신 지원
+adafruit-circuitpython-motor>=3.4.0
+
+# ============ 데이터 처리 및 설정 ============
+
+# 설정 파일 처리 (YAML)
+PyYAML>=6.0
+
+# 센서 데이터 필터링
+filterpy>=1.4.5
+
+# 수학 및 과학 계산
+scipy>=1.7.0
+
+# ============ 선택적 라이브러리 (Optional) ============
+
+# 영상 처리 (카메라 사용 시)
+# opencv-python>=4.5.0
+# Pillow>=9.0.0
+
+# 웹 인터페이스 (원격 제어 시)
+# flask>=2.0.0
+# websockets>=10.0
+
+# 게임/GUI 라이브러리
+# pygame>=2.1.0
+
+# 통신 라이브러리
+# asyncio-mqtt>=0.11.0
+
+# 3D 및 고급 수학
+# matplotlib>=3.5.0
+
+# ============ 개발 도구 (Development Tools) ============
+# 개발 시에만 필요, 프로덕션에서는 주석 처리
+
+# 코드 포매터
+# black>=22.0.0
+# isort>=5.10.0
+
+# 린터
+# flake8>=4.0.0
+# pylint>=2.12.0
+
+# 타입 체커
+# mypy>=0.910
+
+# 테스트 도구
+# pytest>=7.0.0
+# pytest-cov>=3.0.0
+# pytest-mock>=3.6.0
+
+# 문서화 도구
+# sphinx>=4.4.0
+# sphinx-rtd-theme>=1.0.0
+
+# ============ 설치 순서 및 주의사항 ============
+# 
+# 1. 시스템 패키지 먼저 설치:
+#    sudo apt update
+#    sudo apt install python3-pip python3-dev i2c-tools
+#
+# 2. 인터페이스 활성화:
+#    sudo raspi-config (I2C, SPI 활성화)
+#
+# 3. Python 패키지 설치:
+#    pip3 install -r requirements.txt
+#
+# 4. LED 제어는 root 권한 필요:
+#    sudo python3 hardware/test_led_strip.py
+#
+# 5. 재부팅 권장:
+#    sudo reboot
