@@ -105,28 +105,30 @@ def test_motors():
     try:
         print("모터 테스트를 시작합니다...")
 
+        SPEED = 100
+
         # 전진 테스트
         print("전진 테스트 (3초)")
-        controller.set_motor_speed("A", 50)
-        controller.set_motor_speed("B", 50)
+        controller.set_motor_speed("A", 100)
+        controller.set_motor_speed("B", 100)
         time.sleep(3)
 
         # 후진 테스트
         print("후진 테스트 (3초)")
-        controller.set_motor_speed("A", -50)
-        controller.set_motor_speed("B", -50)
+        controller.set_motor_speed("A", -100)
+        controller.set_motor_speed("B", -100)
         time.sleep(3)
 
         # 우회전 테스트
         print("우회전 테스트 (3초)")
-        controller.set_motor_speed("A", 50)
-        controller.set_motor_speed("B", -50)
+        controller.set_motor_speed("A", 100)
+        controller.set_motor_speed("B", 0)
         time.sleep(3)
 
         # 좌회전 테스트
         print("좌회전 테스트 (3초)")
-        controller.set_motor_speed("A", -50)
-        controller.set_motor_speed("B", 50)
+        controller.set_motor_speed("A", 0)
+        controller.set_motor_speed("B", 100)
         time.sleep(3)
 
         # 정지
