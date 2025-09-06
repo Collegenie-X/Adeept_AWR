@@ -25,10 +25,10 @@ try:
     from hardware.test_gear_motors import GearMotorController
     from hardware.test_ultrasonic_sensor import UltrasonicSensor
 
-    print("✓ 실제 하드웨어 사용")
+    print("Using real hardware")
     SIMULATION = False
 except ImportError:
-    print("⚠️ 시뮬레이션 모드")
+    print("Simulation mode")
     SIMULATION = True
 
 # ==================== 설정값 (단계별 학습용) ====================
@@ -78,13 +78,13 @@ def setup():
             line_sensor = LineSensorController()
             motor = GearMotorController()
             ultrasonic = UltrasonicSensor()
-            print("✓ 하드웨어 준비 완료")
+            print("Hardware ready")
             return True
         except Exception as e:
-            print(f"❌ 하드웨어 오류: {e}")
+            print(f"Hardware error: {e}")
             return False
     else:
-        print("✓ 시뮬레이션 준비 완료")
+        print("Simulation ready")
         return True
 
 
@@ -124,7 +124,7 @@ def read_distance():
 
         if random.random() < 0.08:  # 8% 확률로 장애물
             distance = random.randint(5, SAFE_DISTANCE - 1)
-            print(f"🚨 시뮬레이션 장애물: {distance}cm")
+            print(f"Sim obstacle: {distance}cm")
             return distance
         else:
             distance = random.randint(SAFE_DISTANCE + 10, 100)
@@ -139,20 +139,20 @@ def check_rotary(current_line):
     if current_line != last_line_position:
         line_change_count += 1
         last_line_position = current_line
-        print(f"  📊 라인 변화 감지: {line_change_count}회")
+        print(f"  Line change detected: {line_change_count} times")
 
     # 로터리 감지 조건: 짧은 시간에 많은 라인 변화
     if line_change_count >= ROTARY_LINE_CHANGE_THRESHOLD and not rotary_mode:
         rotary_mode = True
         rotary_start_time = time.time()
         line_change_count = 0  # 카운트 리셋
-        print("🌀 로터리 감지! 안전 모드로 전환")
+        print("Rotary detected! Switching to safe mode")
         return True
 
     # 로터리 모드에서 일정 시간 경과 시 해제
     if rotary_mode and (time.time() - rotary_start_time) > ROTARY_DETECTION_TIME:
         rotary_mode = False
-        print("✅ 로터리 통과 완료! 정상 모드로 복귀")
+        print("Rotary passed! Returning to normal mode")
         return False
 
     return rotary_mode
@@ -162,9 +162,9 @@ def stop():
     """정지"""
     if motor:
         motor.motor_stop()
-        print("⏹️ 정지")
+        print("Stop")
     else:
-        print("시뮬레이션: 정지")
+        print("Simulation: Stop")
 
 
 def go_forward(speed=None):
@@ -173,9 +173,9 @@ def go_forward(speed=None):
     if motor:
         motor.set_motor_speed("A", speed)  # 오른쪽
         motor.set_motor_speed("B", speed)  # 왼쪽
-        print(f"⬆️ 직진 (속도: {speed})")
+        print(f"Forward (speed: {speed})")
     else:
-        print(f"시뮬레이션: 직진 (속도: {speed})")
+        print(f"Simulation: Forward (speed: {speed})")
 
 
 def turn_left():
@@ -183,10 +183,10 @@ def turn_left():
     if motor:
         motor.set_motor_speed("A", LEFT_TURN_RIGHT_MOTOR)  # 오른쪽: 높은 속도
         motor.set_motor_speed("B", -LEFT_TURN_LEFT_MOTOR)  # 왼쪽: 낮은 속도 후진
-        print(f"⬅️ 좌회전 (우측:{LEFT_TURN_RIGHT_MOTOR}, 좌측:-{LEFT_TURN_LEFT_MOTOR})")
+        print(f"Turn left (R:{LEFT_TURN_RIGHT_MOTOR}, L:-{LEFT_TURN_LEFT_MOTOR})")
     else:
         print(
-            f"시뮬레이션: 좌회전 (우측:{LEFT_TURN_RIGHT_MOTOR}, 좌측:-{LEFT_TURN_LEFT_MOTOR})"
+            f"Simulation: Turn left (R:{LEFT_TURN_RIGHT_MOTOR}, L:-{LEFT_TURN_LEFT_MOTOR})"
         )
 
 
@@ -195,35 +195,33 @@ def turn_right():
     if motor:
         motor.set_motor_speed("A", -RIGHT_TURN_RIGHT_MOTOR)  # 오른쪽: 낮은 속도 후진
         motor.set_motor_speed("B", RIGHT_TURN_LEFT_MOTOR)  # 왼쪽: 높은 속도
-        print(
-            f"➡️ 우회전 (우측:-{RIGHT_TURN_RIGHT_MOTOR}, 좌측:{RIGHT_TURN_LEFT_MOTOR})"
-        )
+        print(f"Turn right (R:-{RIGHT_TURN_RIGHT_MOTOR}, L:{RIGHT_TURN_LEFT_MOTOR})")
     else:
         print(
-            f"시뮬레이션: 우회전 (우측:-{RIGHT_TURN_RIGHT_MOTOR}, 좌측:{RIGHT_TURN_LEFT_MOTOR})"
+            f"Simulation: Turn right (R:-{RIGHT_TURN_RIGHT_MOTOR}, L:{RIGHT_TURN_LEFT_MOTOR})"
         )
 
 
 def avoid_obstacle():
     """장애물 피하기 (좌회전 → 직진 → 우회전)"""
-    print("🚨 장애물 회피 시작!")
+    print("Obstacle avoidance started!")
 
     # 1단계: 좌회전
-    print("  1. 좌회전으로 피하기")
+    print("  1. Avoid by turning left")
     turn_left()
     time.sleep(AVOID_TIME)
 
     # 2단계: 직진으로 지나가기
-    print("  2. 직진으로 지나가기")
+    print("  2. Go straight to pass")
     go_forward()
     time.sleep(AVOID_TIME)
 
     # 3단계: 우회전으로 원래 방향
-    print("  3. 우회전으로 복귀")
+    print("  3. Turn right to return")
     turn_right()
     time.sleep(AVOID_TIME)
 
-    print("✅ 장애물 회피 완료!")
+    print("Obstacle avoidance completed!")
 
 
 def drive_basic():
@@ -270,7 +268,7 @@ def drive_with_rotary():
     # 4단계: 주행 모드 결정
     if is_rotary:
         # 로터리 모드: 안전하게 천천히
-        print(f"🌀 로터리 안전 주행: {line_position}")
+        print(f"Rotary safe driving: {line_position}")
         if line_position == "center":
             go_forward(ROTARY_SAFE_SPEED)
         elif line_position == "left":
@@ -301,18 +299,18 @@ def show_progress_bar(current_time, total_time, step_name):
 def step1_basic_line_following():
     """Step 1: 기본 라인 추적 수업 (시간 제한)"""
     print("\n" + "=" * 50)
-    print("📚 Step 1: 기본 라인 추적 수업")
+    print("Step 1: Basic line following lesson")
     print("=" * 50)
-    print("학습 내용:")
-    print("- 라인 센서로 선의 위치 감지")
-    print("- LEFT/RIGHT 개별 모터 속도 제어")
-    print("- 기본적인 if-else 조건문 사용")
+    print("Topics:")
+    print("- Detect line position with sensors")
+    print("- Control LEFT/RIGHT motor speeds")
+    print("- Use basic if-else conditions")
     print("=" * 50)
 
     if not setup():
         return
 
-    print(f"🚀 Step 1 시작! ({STEP1_TIME}초간 실행)")
+    print(f"Step 1 started! ({STEP1_TIME}s)")
     start_time = time.time()
 
     try:
@@ -321,7 +319,7 @@ def step1_basic_line_following():
 
             # 시간 종료 체크
             if current_time >= STEP1_TIME:
-                print(f"\n⏰ {STEP1_TIME}초 완료! 메뉴로 돌아갑니다")
+                print(f"\n{STEP1_TIME}s done! Returning to menu")
                 break
 
             # 진행 상황 표시 (2초마다)
@@ -332,7 +330,7 @@ def step1_basic_line_following():
             time.sleep(0.1)
 
     except KeyboardInterrupt:
-        print("\n⌨️ Ctrl+C로 중단")
+        print("\nCtrl+C pressed")
     finally:
         cleanup()
 
@@ -340,9 +338,9 @@ def step1_basic_line_following():
 def step2_obstacle_avoidance():
     """Step 2: 장애물 회피 수업 (시간 제한)"""
     print("\n" + "=" * 50)
-    print("📚 Step 2: 장애물 회피 수업")
+    print("Step 2: Obstacle avoidance lesson")
     print("=" * 50)
-    print("학습 내용:")
+    print("Topics:")
     print("- 초음파 센서로 거리 측정")
     print("- 3단계 장애물 회피 알고리즘")
     print("- 우선순위 기반 의사결정")
@@ -351,7 +349,7 @@ def step2_obstacle_avoidance():
     if not setup():
         return
 
-    print(f"🚀 Step 2 시작! ({STEP2_TIME}초간 실행)")
+    print(f"Step 2 started! ({STEP2_TIME}s)")
     start_time = time.time()
 
     try:
@@ -360,7 +358,7 @@ def step2_obstacle_avoidance():
 
             # 시간 종료 체크
             if current_time >= STEP2_TIME:
-                print(f"\n⏰ {STEP2_TIME}초 완료! 메뉴로 돌아갑니다")
+                print(f"\n{STEP2_TIME}s done! Returning to menu")
                 break
 
             # 진행 상황 표시 (2초마다)
@@ -371,7 +369,7 @@ def step2_obstacle_avoidance():
             time.sleep(0.1)
 
     except KeyboardInterrupt:
-        print("\n⌨️ Ctrl+C로 중단")
+        print("\nCtrl+C pressed")
     finally:
         cleanup()
 
@@ -379,9 +377,9 @@ def step2_obstacle_avoidance():
 def step3_rotary_detection():
     """Step 3: 로터리 감지 수업 (시간 제한)"""
     print("\n" + "=" * 50)
-    print("📚 Step 3: 로터리 감지 수업 (고급)")
+    print("Step 3: Rotary detection lesson (advanced)")
     print("=" * 50)
-    print("학습 내용:")
+    print("Topics:")
     print("- 패턴 인식을 통한 로터리 감지")
     print("- 상태 관리 (rotary_mode)")
     print("- 적응형 속도 제어")
@@ -391,7 +389,7 @@ def step3_rotary_detection():
     if not setup():
         return
 
-    print(f"🚀 Step 3 시작! ({STEP3_TIME}초간 실행)")
+    print(f"Step 3 started! ({STEP3_TIME}s)")
     start_time = time.time()
 
     try:
@@ -400,7 +398,7 @@ def step3_rotary_detection():
 
             # 시간 종료 체크
             if current_time >= STEP3_TIME:
-                print(f"\n⏰ {STEP3_TIME}초 완료! 메뉴로 돌아갑니다")
+                print(f"\n{STEP3_TIME}s done! Returning to menu")
                 break
 
             # 진행 상황 표시 (2초마다)
@@ -411,7 +409,7 @@ def step3_rotary_detection():
             time.sleep(0.1)
 
     except KeyboardInterrupt:
-        print("\n⌨️ Ctrl+C로 중단")
+        print("\nCtrl+C pressed")
     finally:
         cleanup()
 
@@ -419,27 +417,27 @@ def step3_rotary_detection():
 def show_settings():
     """현재 설정 표시"""
     print("\n" + "=" * 50)
-    print("🚗 초간단 자율 주행차 v2 Easy 설정")
+    print("Ultra Simple Car v2 Easy Settings")
     print("=" * 50)
-    print("📈 기본 속도:")
-    print(f"  직진 속도: {FORWARD_SPEED}")
+    print("Base speed:")
+    print(f"  Forward: {FORWARD_SPEED}")
     print()
-    print("🔄 회전 속도 (개별 설정):")
+    print("Turn speeds (per side):")
     print(
-        f"  좌회전 - 우측모터: {LEFT_TURN_RIGHT_MOTOR}, 좌측모터: {LEFT_TURN_LEFT_MOTOR}"
+        f"  Left  - Right motor: {LEFT_TURN_RIGHT_MOTOR}, Left motor: {LEFT_TURN_LEFT_MOTOR}"
     )
     print(
-        f"  우회전 - 우측모터: {RIGHT_TURN_RIGHT_MOTOR}, 좌측모터: {RIGHT_TURN_LEFT_MOTOR}"
+        f"  Right - Right motor: {RIGHT_TURN_RIGHT_MOTOR}, Left motor: {RIGHT_TURN_LEFT_MOTOR}"
     )
     print()
-    print("🛡️ 장애물 회피:")
-    print(f"  안전 거리: {SAFE_DISTANCE}cm")
-    print(f"  회피 시간: {AVOID_TIME}초")
+    print("Obstacle avoidance:")
+    print(f"  Safe distance: {SAFE_DISTANCE}cm")
+    print(f"  Avoid time: {AVOID_TIME}s")
     print()
-    print("🌀 로터리 감지:")
-    print(f"  감지 시간: {ROTARY_DETECTION_TIME}초")
-    print(f"  안전 속도: {ROTARY_SAFE_SPEED}")
-    print(f"  라인 변화 임계값: {ROTARY_LINE_CHANGE_THRESHOLD}회")
+    print("Rotary detection:")
+    print(f"  Detect time: {ROTARY_DETECTION_TIME}s")
+    print(f"  Safe speed: {ROTARY_SAFE_SPEED}")
+    print(f"  Line change threshold: {ROTARY_LINE_CHANGE_THRESHOLD}")
     print()
     print("⏰ 단계별 실행 시간:")
     print(f"  Step 1: {STEP1_TIME}초")
@@ -458,7 +456,7 @@ def cleanup():
             motor.cleanup()
         if ultrasonic:
             ultrasonic.cleanup()
-        print("✓ 정리 완료")
+        print("Cleanup completed")
     except:
         pass
 
@@ -466,16 +464,16 @@ def cleanup():
 def show_menu():
     """메뉴 표시"""
     print("\n" + "=" * 60)
-    print("🎓 초간단 자율 주행차 v2 Easy - 단계별 학습")
+    print("Ultra Simple Car v2 Easy - Step-by-step Learning")
     print("=" * 60)
-    print(f"1. Step 1: 기본 라인 추적 (초급) - {STEP1_TIME}초 자동 종료")
-    print(f"2. Step 2: 장애물 회피 추가 (중급) - {STEP2_TIME}초 자동 종료")
-    print(f"3. Step 3: 로터리 감지 추가 (고급) - {STEP3_TIME}초 자동 종료")
-    print("4. 설정 보기")
-    print("5. 전체 기능 실행 (무제한)")
-    print("0. 종료")
+    print(f"1. Step 1: Basic line following (beginner) - auto exit in {STEP1_TIME}s")
+    print(f"2. Step 2: Obstacle avoidance (intermediate) - auto exit in {STEP2_TIME}s")
+    print(f"3. Step 3: Rotary detection (advanced) - auto exit in {STEP3_TIME}s")
+    print("4. Show settings")
+    print("5. Run all features (unlimited)")
+    print("0. Exit")
     print("=" * 60)
-    print("💡 팁: 각 단계는 자동으로 종료되어 메뉴로 돌아갑니다!")
+    print("Tip: Each step auto-returns to menu!")
 
 
 def main():
@@ -484,7 +482,7 @@ def main():
         show_menu()
 
         try:
-            choice = input("선택하세요 (0-5): ").strip()
+            choice = input("Choose (0-5): ").strip()
 
             if choice == "1":
                 step1_basic_line_following()
@@ -499,8 +497,8 @@ def main():
                 show_settings()
 
             elif choice == "5":
-                print("\n🚀 전체 기능 실행!")
-                print("Ctrl+C로 중단할 수 있습니다")
+                print("\nRun all features!")
+                print("Press Ctrl+C to stop")
 
                 if not setup():
                     continue
@@ -510,19 +508,19 @@ def main():
                         drive_with_rotary()
                         time.sleep(0.1)
                 except KeyboardInterrupt:
-                    print("\n⌨️ Ctrl+C로 중단")
+                    print("\nCtrl+C pressed")
                 finally:
                     cleanup()
 
             elif choice == "0":
-                print("👋 프로그램 종료")
+                print("Program exited")
                 break
 
             else:
-                print("❌ 잘못된 선택입니다")
+                print("Invalid choice")
 
         except KeyboardInterrupt:
-            print("\n\n⌨️ 프로그램 종료")
+            print("\n\nProgram terminated")
             break
 
 

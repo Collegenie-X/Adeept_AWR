@@ -24,10 +24,10 @@ try:
     from hardware.test_gear_motors import GearMotorController
     from hardware.test_ultrasonic_sensor import UltrasonicSensor
 
-    print("✓ 실제 하드웨어 사용")
+    print("Using real hardware")
     SIMULATION = False
 except ImportError:
-    print("⚠️ 시뮬레이션 모드")
+    print("Simulation mode")
     SIMULATION = True
 
 # 설정값 (여기만 바꾸면 됩니다!)
@@ -52,13 +52,13 @@ def setup():
             line_sensor = LineSensorController()
             motor = GearMotorController()
             ultrasonic = UltrasonicSensor()
-            print("✓ 하드웨어 준비 완료")
+            print("Hardware ready")
             return True
         except Exception as e:
-            print(f"❌ 하드웨어 오류: {e}")
+            print(f"Hardware error: {e}")
             return False
     else:
-        print("✓ 시뮬레이션 준비 완료")
+        print("Simulation ready")
         return True
 
 
@@ -87,21 +87,19 @@ def read_distance():
     """앞의 거리 읽기"""
     if ultrasonic:
         distance = ultrasonic.measure_distance()
-        print(f"---------거리: {distance}")
+        print(f"Distance: {distance}")
         return distance if distance else 999
     else:
         # 시뮬레이션
         import random
 
-        if random.random() < 0.1:  # 10% 확률로 장애물
-            distance = random.randint(5, SAFE_DISTANCE - 1)  # SAFE_DISTANCE보다 작은 값
-            print(f"---------시뮬레이션 장애물 거리: {distance}cm")
+        if random.random() < 0.1:  # 10% obstacle chance
+            distance = random.randint(5, SAFE_DISTANCE - 1)
+            print(f"Sim obstacle distance: {distance}cm")
             return distance
         else:
-            distance = random.randint(
-                SAFE_DISTANCE + 10, 100
-            )  # SAFE_DISTANCE보다 충분히 큰 값
-            print(f"---------시뮬레이션 안전 거리: {distance}cm")
+            distance = random.randint(SAFE_DISTANCE + 10, 100)
+            print(f"Sim safe distance: {distance}cm")
             return distance
 
 
@@ -109,9 +107,9 @@ def stop():
     """정지"""
     if motor:
         motor.motor_stop()
-        print("⏹️ 정지")
+        print("Stop")
     else:
-        print("시뮬레이션: 정지")
+        print("Simulation: Stop")
 
 
 def go_forward():
@@ -119,9 +117,9 @@ def go_forward():
     if motor:
         motor.set_motor_speed("A", FORWARD_SPEED)  # 오른쪽
         motor.set_motor_speed("B", FORWARD_SPEED)  # 왼쪽
-        print("⬆️ 직진")
+        print("Forward")
     else:
-        print("시뮬레이션: 직진")
+        print("Simulation: Forward")
 
 
 def turn_left():
@@ -129,9 +127,9 @@ def turn_left():
     if motor:
         motor.set_motor_speed("A", HIGH_TURN_SPEED)  # 오른쪽: 앞으로
         motor.set_motor_speed("B", -LOW_TURN_SPEED)  # 왼쪽: 뒤로
-        print("⬅️ 좌회전")
+        print("Turn left")
     else:
-        print("시뮬레이션: 좌회전")
+        print("Simulation: Turn left")
 
 
 def turn_right():
@@ -139,31 +137,31 @@ def turn_right():
     if motor:
         motor.set_motor_speed("A", -LOW_TURN_SPEED)  # 오른쪽: 뒤로
         motor.set_motor_speed("B", HIGH_TURN_SPEED)  # 왼쪽: 앞으로
-        print("➡️ 우회전")
+        print("Turn right")
     else:
-        print("시뮬레이션: 우회전")
+        print("Simulation: Turn right")
 
 
 def avoid_obstacle():
     """장애물 피하기 (좌회전 → 직진 → 우회전)"""
-    print("🚨 장애물 피하기 시작!")
+    print("Obstacle avoidance started!")
 
     # 1단계: 좌회전
-    print("  1. 좌회전으로 피하기")
+    print("  1. Avoid by turning left")
     turn_left()
     time.sleep(AVOID_TIME)
 
     # 2단계: 직진으로 지나가기
-    print("  2. 직진으로 지나가기")
+    print("  2. Go straight to pass")
     go_forward()
     time.sleep(AVOID_TIME)
 
     # 3단계: 우회전으로 원래 방향
-    print("  3. 우회전으로 복귀")
+    print("  3. Turn right to return")
     turn_right()
     time.sleep(AVOID_TIME)
 
-    print("✅ 장애물 피하기 완료!")
+    print("Obstacle avoidance completed!")
 
 
 def drive():
@@ -178,7 +176,7 @@ def drive():
 
     # 2단계: 라인 추적
     line_position = read_line()
-    print(f"---------라인 위치: {line_position} ----------------")
+    print(f"Line position: {line_position}")
 
     if line_position == "center":
         go_forward()
@@ -200,28 +198,28 @@ def cleanup():
             motor.cleanup()
         if ultrasonic:
             ultrasonic.cleanup()
-        print("✓ 정리 완료")
+        print("Cleanup completed")
     except:
         pass
 
 
 def main():
     """메인 함수"""
-    print("🚗 초간단 자율 주행차")
+    print("Ultra Simple Autonomous Car")
     print("=" * 30)
-    print("기능: 라인 추적 + 장애물 회피")
-    print("설정:")
-    print(f"  직진 속도: {FORWARD_SPEED}")
-    print(f"  회전 속도: {LOW_TURN_SPEED}, {HIGH_TURN_SPEED}")
-    print(f"  안전 거리: {SAFE_DISTANCE}cm")
+    print("Features: Line following + Obstacle avoidance")
+    print("Settings:")
+    print(f"  Forward speed: {FORWARD_SPEED}")
+    print(f"  Turn speeds: {LOW_TURN_SPEED}, {HIGH_TURN_SPEED}")
+    print(f"  Safe distance: {SAFE_DISTANCE}cm")
     print("=" * 30)
 
     if not setup():
-        print("❌ 준비 실패")
+        print("Setup failed")
         return
 
-    print("\n🚀 자율 주행 시작!")
-    print("Ctrl+C로 멈출 수 있습니다")
+    print("\nAutonomous driving started!")
+    print("Press Ctrl+C to stop")
 
     try:
         while True:
@@ -229,12 +227,12 @@ def main():
             time.sleep(0.1)  # 잠시 대기
 
     except KeyboardInterrupt:
-        print("\n\n⌨️ 사용자가 중단했습니다")
+        print("\n\nUser interrupted")
     except Exception as e:
-        print(f"\n❌ 오류 발생: {e}")
+        print(f"\nError occurred: {e}")
     finally:
         cleanup()
-        print("👋 프로그램 종료")
+        print("Program exited")
 
 
 if __name__ == "__main__":

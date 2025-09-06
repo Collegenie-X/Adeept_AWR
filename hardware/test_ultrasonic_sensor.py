@@ -79,15 +79,15 @@ class UltrasonicSensor:
         :return: (상태 문자열, LED 색상)
         """
         if distance is None:
-            return "측정 실패", "빨간색"
+            return "MEASURE_FAIL", "RED"
         elif distance < 10:
-            return "비상 정지", "빨간색"
+            return "EMERGENCY_STOP", "RED"
         elif distance < 20:
-            return "장애물 회피", "주황색"
+            return "AVOID_OBSTACLE", "ORANGE"
         elif distance < 40:
-            return "감속", "노란색"
+            return "SLOW_DOWN", "YELLOW"
         else:
-            return "정상", "초록색"
+            return "NORMAL", "GREEN"
 
     def cleanup(self):
         """GPIO 설정 초기화"""
@@ -99,8 +99,8 @@ def test_ultrasonic():
     sensor = UltrasonicSensor()
 
     try:
-        print("초음파 센서 테스트를 시작합니다...")
-        print("Ctrl+C를 눌러 종료하세요.")
+        print("Ultrasonic sensor test started...")
+        print("Press Ctrl+C to exit.")
 
         while True:
             # 거리 측정
@@ -110,16 +110,16 @@ def test_ultrasonic():
             # 상태 출력
             if distance is not None:
                 print(
-                    f"\r거리: {distance:5.1f}cm | 상태: {status:8s} | LED: {led_color}",
+                    f"\rDistance: {distance:5.1f}cm | Status: {status:14s} | LED: {led_color}",
                     end="",
                 )
             else:
-                print("\r거리: 측정실패 | 상태: 에러    | LED: 빨간색", end="")
+                print("\rDistance: FAIL | Status: ERROR        | LED: RED", end="")
 
             time.sleep(0.1)
 
     except KeyboardInterrupt:
-        print("\n프로그램을 종료합니다.")
+        print("\nProgram terminated by user.")
     finally:
         sensor.cleanup()
 

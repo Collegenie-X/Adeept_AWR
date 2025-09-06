@@ -52,14 +52,14 @@ class LineSensorController:
 
         # 패턴별 위치 및 설명 매핑
         position_map = {
-            0b000: (None, "라인 없음"),  # 000: 모든 센서 OFF
-            0b001: (1, "우측 가장자리"),  # 001: 우측만 ON
-            0b010: (0, "중앙 정확"),  # 010: 중앙만 ON
-            0b011: (0.5, "중앙-우측"),  # 011: 중앙+우측 ON
-            0b100: (-1, "좌측 가장자리"),  # 100: 좌측만 ON
-            0b101: (None, "라인 분실 또는 교차점"),  # 101: 좌측+우측 ON (중앙 OFF)
-            0b110: (-0.5, "중앙-좌측"),  # 110: 좌측+중앙 ON
-            0b111: (0, "넓은 라인 또는 교차점"),  # 111: 모든 센서 ON
+            0b000: (None, "NO LINE"),  # 000: all sensors OFF
+            0b001: (1, "RIGHT EDGE"),  # 001: only right ON
+            0b010: (0, "CENTER"),  # 010: only middle ON
+            0b011: (0.5, "CENTER-RIGHT"),  # 011: middle+right ON
+            0b100: (-1, "LEFT EDGE"),  # 100: only left ON
+            0b101: (None, "CROSS OR LOST"),  # 101: left+right ON (middle OFF)
+            0b110: (-0.5, "CENTER-LEFT"),  # 110: left+middle ON
+            0b111: (0, "WIDE LINE OR CROSS"),  # 111: all sensors ON
         }
 
         position, description = position_map.get(pattern, (0, "알 수 없음"))
@@ -99,12 +99,12 @@ def test_line_sensors():
     controller = LineSensorController()
 
     try:
-        print("라인 센서 테스트를 시작합니다...")
-        print("센서 패턴별 위치 판단을 확인하세요.")
+        print("Line sensor test started...")
+        print("Check position decision for each sensor pattern.")
         print("=" * 70)
-        print("센서 패턴: 좌[●/○] 중[●/○] 우[●/○] | 위치값 | 설명")
+        print("Pattern: L[●/○] M[●/○] R[●/○] | Pos | Desc")
         print("=" * 70)
-        print("Ctrl+C를 눌러 종료하세요.\n")
+        print("Press Ctrl+C to exit.\n")
 
         while True:
             # 센서 값 읽기 (개선된 로직 사용)
@@ -120,20 +120,20 @@ def test_line_sensors():
             )
 
             # 간단한 위치 표시
-            simple_str = {-1: "←좌측", 0: "↑중앙", 1: "우측→", None: "없음"}[simple_pos]
+            simple_str = {-1: "LEFT", 0: "CENTER", 1: "RIGHT", None: "NONE"}[simple_pos]
 
             # 상태 출력 (더 상세한 정보)
             print(
-                f"\r센서: 좌[{'●' if left else '○'}] 중[{'●' if middle else '○'}] 우[{'●' if right else '○'}] "
+                f"\rSensors: L[{'●' if left else '○'}] M[{'●' if middle else '○'}] R[{'●' if right else '○'}] "
                 f"| {pos_str} | {line_info['description']:12s} | {simple_str:6s} | "
-                f"패턴:{line_info['pattern']} ({line_info['binary']})",
+                f"Pattern:{line_info['pattern']} ({line_info['binary']})",
                 end="",
             )
 
             time.sleep(0.1)
 
     except KeyboardInterrupt:
-        print("\n프로그램을 종료합니다.")
+        print("\nProgram terminated.")
     finally:
         controller.cleanup()
 

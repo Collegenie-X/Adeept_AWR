@@ -53,14 +53,14 @@ class LineSensorController:
 
         # 패턴별 위치 및 설명 매핑 (노란선/흰선 감지 기준)
         position_map = {
-            0b000: (None, "라인 없음 (검은 바탕)"),  # 000: 모든 센서 OFF - 검은 바탕
-            0b001: (1, "우측 라인 감지"),  # 001: 우측만 ON - 우측에 노란선/흰선
-            0b010: (0, "중앙 라인 감지"),  # 010: 중앙만 ON - 중앙에 라인
-            0b011: (0.5, "중앙-우측 라인"),  # 011: 중앙+우측 ON
-            0b100: (-1, "좌측 라인 감지"),  # 100: 좌측만 ON - 좌측에 노란선/흰선
-            0b101: (None, "복합 패턴 (교차점?)"),  # 101: 좌측+우측 ON (중앙 OFF)
-            0b110: (-0.5, "중앙-좌측 라인"),  # 110: 좌측+중앙 ON
-            0b111: (0, "넓은 라인 (노란선 도로)"),  # 111: 모든 센서 ON - 넓은 노란선
+            0b000: (None, "NO LINE (black background)"),
+            0b001: (1, "RIGHT LINE"),
+            0b010: (0, "CENTER LINE"),
+            0b011: (0.5, "CENTER-RIGHT LINE"),
+            0b100: (-1, "LEFT LINE"),
+            0b101: (None, "COMPLEX (junction?)"),
+            0b110: (-0.5, "CENTER-LEFT LINE"),
+            0b111: (0, "WIDE LINE (yellow road)"),
         }
 
         position, description = position_map.get(pattern, (0, "알 수 없음"))
@@ -100,15 +100,15 @@ def test_line_sensors():
     controller = LineSensorController()
 
     try:
-        print("라인 센서 테스트를 시작합니다...")
-        print("🛣️ 지원 도로 타입:")
-        print("  ✅ 검은 바탕 + 노란선 (일반 도로)")
-        print("  ✅ 흰 바탕 + 검은선 (실습용)")
-        print("📡 센서 동작: HIGH(●)=밝은표면, LOW(○)=어두운표면")
+        print("Line sensor test started...")
+        print("Supported road types:")
+        print("  - Black background + Yellow line (road)")
+        print("  - White background + Black line (training)")
+        print("Sensor: HIGH(●)=bright, LOW(○)=dark")
         print("=" * 75)
-        print("센서 패턴: 좌[●/○] 중[●/○] 우[●/○] | 위치값 | 설명")
+        print("Pattern: L[●/○] M[●/○] R[●/○] | Pos | Desc")
         print("=" * 75)
-        print("Ctrl+C를 눌러 종료하세요.\n")
+        print("Press Ctrl+C to exit.\n")
 
         while True:
             # 센서 값 읽기 (개선된 로직 사용)
@@ -124,20 +124,20 @@ def test_line_sensors():
             )
 
             # 간단한 위치 표시
-            simple_str = {-1: "←좌측", 0: "↑중앙", 1: "우측→", None: "없음"}[simple_pos]
+            simple_str = {-1: "LEFT", 0: "CENTER", 1: "RIGHT", None: "NONE"}[simple_pos]
 
             # 상태 출력 (더 상세한 정보)
             print(
-                f"\r센서: 좌[{'●' if left else '○'}] 중[{'●' if middle else '○'}] 우[{'●' if right else '○'}] "
-                f"| {pos_str} | {line_info['description']:12s} | {simple_str:6s} | "
-                f"패턴:{line_info['pattern']} ({line_info['binary']})",
+                f"\rSensors: L[{'●' if left else '○'}] M[{'●' if middle else '○'}] R[{'●' if right else '○'}] "
+                f"| {pos_str} | {line_info['description']:20s} | {simple_str:6s} | "
+                f"Pattern:{line_info['pattern']} ({line_info['binary']})",
                 end="",
             )
 
             time.sleep(0.1)
 
     except KeyboardInterrupt:
-        print("\n프로그램을 종료합니다.")
+        print("\nProgram terminated.")
     finally:
         controller.cleanup()
 
@@ -146,7 +146,7 @@ def test_line_patterns():
     """라인 센서 패턴별 상세 테스트"""
     controller = LineSensorController()
 
-    print("라인 센서 패턴 분석 테스트")
+    print("Line sensor pattern analysis test")
     print("=" * 50)
 
     # 모든 가능한 패턴 시뮬레이션 (노란선 도로 기준)
@@ -166,9 +166,9 @@ def test_line_patterns():
         pattern = (left << 2) | (middle << 1) | right
 
         # 가상 테스트
-        print(f"패턴 {left}{middle}{right} (0b{pattern:03b}): {description}")
+        print(f"Pattern {left}{middle}{right} (0b{pattern:03b}): {description}")
 
-    print("\n실제 센서로 테스트를 시작합니다...")
+    print("\nStarting the real sensor test...")
     test_line_sensors()
 
 
