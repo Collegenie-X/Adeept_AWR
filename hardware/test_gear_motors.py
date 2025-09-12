@@ -94,76 +94,52 @@ def drive(right_speed, left_speed):
     :param left_speed: 좌측 모터 속도 (-100~+100)
     """
     # 모터A = 우측, 모터B = 좌측 (pinout.md 기준)
-    motor_a_control(+1 if right_speed >= 0 else -1, abs(right_speed))
-    motor_b_control(+1 if left_speed >= 0 else -1, abs(left_speed))
+    # 변경사항: 속도가 0이면 해당 바퀴를 완전 정지(방향핀 LOW, PWM 0)하여 잔류 상태 제거
+    if right_speed == 0:
+        motor_a_control(0, 0)
+    else:
+        motor_a_control(+1 if right_speed > 0 else -1, abs(right_speed))
+
+    if left_speed == 0:
+        motor_b_control(0, 0)
+    else:
+        motor_b_control(+1 if left_speed > 0 else -1, abs(left_speed))
 
 
 def motor_stop():
     """모든 모터 정지"""
+
     motor_a_control(0, 0)
     motor_b_control(0, 0)
-
-
-def individual_motor_test():
-    """개별 모터 테스트 (디버깅용)"""
-    print("\nIndividual motor test started.")
-
-    print("Motor A (right) test - 2s")
-    motor_a_control(+1, 70)
-    time.sleep(2)
-    motor_stop()
-    time.sleep(1)
-
-    print("Motor B (left) test - 2s")
-    motor_b_control(+1, 70)
-    time.sleep(2)
-    motor_stop()
-    time.sleep(1)
-
-    print("Individual test completed.\n")
 
 
 def comprehensive_test_sequence():
     """종합 동작 테스트"""
     print("Comprehensive motor test started.\n")
 
-    # 개별 모터 테스트 먼저 실행
-    individual_motor_test()
+    print("Forward test (4s)")
+    drive(100, 100)  # 우측100%, 좌측100%
+    time.sleep(1)
+    motor_stop()
+    time.sleep(1)
 
-    print("Forward test (3s)")
-    drive(70, 70)  # 우측70%, 좌측70%
+    print("Backward test (4s)")
+    drive(-100, -100)  # 양쪽 후진
+    time.sleep(4)
+    motor_stop()
+    time.sleep(1)
+
+    print("Left turn in place (4s)")
+    drive(100, 0)  # 우측 전진, 좌측 후진
     time.sleep(3)
     motor_stop()
     time.sleep(1)
 
-    print("Backward test (3s)")
-    drive(-70, -70)  # 양쪽 후진
+    print("Right turn in place (4s)")
+    drive(0, 100)  # 우측 후진, 좌측 전진
     time.sleep(3)
     motor_stop()
     time.sleep(1)
-
-    print("Left turn in place (3s)")
-    drive(60, -60)  # 우측 전진, 좌측 후진
-    time.sleep(3)
-    motor_stop()
-    time.sleep(1)
-
-    print("Right turn in place (3s)")
-    drive(-60, 60)  # 우측 후진, 좌측 전진
-    time.sleep(3)
-    motor_stop()
-    time.sleep(1)
-
-    print("Soft left turn (right motor only, 3s)")
-    drive(50, 0)  # 우측만 전진
-    time.sleep(3)
-    motor_stop()
-    time.sleep(1)
-
-    print("Soft right turn (left motor only, 3s)")
-    drive(0, 50)  # 좌측만 전진
-    time.sleep(3)
-    motor_stop()
 
     print("All tests completed!")
 
@@ -178,6 +154,108 @@ def cleanup():
         pass
     GPIO.cleanup()
     print("GPIO cleanup completed.")
+
+
+class GearMotorController:
+    """
+    기어 모터 컨트롤러 클래스
+    - simple_car 모듈에서 기대하는 API와 호환 (set_motor_speed, motor_stop, cleanup)
+    - 채널 매핑: "A"=우측 모터, "B"=좌측 모터
+    - 속도 범위: -100~+100 (부호는 방향)
+    """
+
+    def __init__(self):
+        """GPIO 및 PWM을 초기화합니다."""
+        import RPi.GPIO as GPIO
+
+        # GPIO 초기화
+        GPIO.setwarnings(False)
+        GPIO.setmode(GPIO.BCM)
+
+        # 핀 설정
+        for pin in [ENA, ENB, A1, A2, B1, B2]:
+            GPIO.setup(pin, GPIO.OUT)
+
+        # PWM 객체 생성 및 시작
+        self.pwmA = GPIO.PWM(ENA, 1000)
+        self.pwmB = GPIO.PWM(ENB, 1000)
+        self.pwmA.start(0)
+        self.pwmB.start(0)
+
+        # 초기 정지 상태
+        self._stop_all_motors()
+        print("GearMotorController initialized.")
+
+    def _stop_all_motors(self):
+        """내부용 모터 정지 함수"""
+        import RPi.GPIO as GPIO
+
+        GPIO.output(A1, GPIO.LOW)
+        GPIO.output(A2, GPIO.LOW)
+        GPIO.output(B1, GPIO.LOW)
+        GPIO.output(B2, GPIO.LOW)
+        self.pwmA.ChangeDutyCycle(0)
+        self.pwmB.ChangeDutyCycle(0)
+
+    def set_motor_speed(self, channel: str, speed: int) -> None:
+        """
+        개별 모터 속도/방향 설정
+        :param channel: "A"(우측) 또는 "B"(좌측)
+        :param speed: -100~+100 (0이면 완전 정지)
+        """
+        import RPi.GPIO as GPIO
+
+        if channel not in ("A", "B"):
+            print(f"Invalid channel: {channel}")
+            return
+
+        speed = max(-100, min(100, int(speed)))
+
+        if channel == "A":
+            if speed == 0:
+                GPIO.output(A1, GPIO.LOW)
+                GPIO.output(A2, GPIO.LOW)
+                self.pwmA.ChangeDutyCycle(0)
+            elif speed > 0:
+                GPIO.output(A1, GPIO.HIGH)
+                GPIO.output(A2, GPIO.LOW)
+                self.pwmA.ChangeDutyCycle(abs(speed))
+            else:
+                GPIO.output(A1, GPIO.LOW)
+                GPIO.output(A2, GPIO.HIGH)
+                self.pwmA.ChangeDutyCycle(abs(speed))
+
+        elif channel == "B":
+            if speed == 0:
+                GPIO.output(B1, GPIO.LOW)
+                GPIO.output(B2, GPIO.LOW)
+                self.pwmB.ChangeDutyCycle(0)
+            elif speed > 0:
+                GPIO.output(B1, GPIO.HIGH)
+                GPIO.output(B2, GPIO.LOW)
+                self.pwmB.ChangeDutyCycle(abs(speed))
+            else:
+                GPIO.output(B1, GPIO.LOW)
+                GPIO.output(B2, GPIO.HIGH)
+                self.pwmB.ChangeDutyCycle(abs(speed))
+
+    def motor_stop(self) -> None:
+        """모든 모터를 완전 정지합니다."""
+        self._stop_all_motors()
+
+    def cleanup(self) -> None:
+        """GPIO 리소스를 정리합니다."""
+        try:
+            self._stop_all_motors()
+            self.pwmA.stop()
+            self.pwmB.stop()
+        except:
+            pass
+
+        import RPi.GPIO as GPIO
+
+        GPIO.cleanup()
+        print("GearMotorController cleanup completed.")
 
 
 if __name__ == "__main__":
