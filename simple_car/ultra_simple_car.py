@@ -85,58 +85,91 @@ def setup():
 
 def read_line():
     """
-    도로폭 기반 라인 센서 읽기
-    - left: 왼쪽 경계선 감지 (오른쪽으로 이동 필요)
-    - center: 중앙 경계선 감지 (위험! 반대 방향으로 회피)
-    - right: 오른쪽 경계선 감지 (왼쪽으로 이동 필요)
-    - none: 경계선 없음 (도로 중앙, 직진)
+    노란색 도로선 감지 및 회피 주행 - 검정색 도로 위에서 노란색 선을 피해 주행
+    - left: 왼쪽 노란선 감지 → 우측으로 회피 (도로 중앙으로)
+    - center: 중앙 노란선 감지 → 위험! 즉시 회피 (선을 밟고 있음)
+    - right: 오른쪽 노란선 감지 → 좌측으로 회피 (도로 중앙으로)
+    - none: 노란선 없음 → 검정 도로 위 안전, 직진
+    - mixed: 복합 상황 (교차점, 코너 등)
+
+    센서 동작:
+    - HIGH(1): 노란선 감지 (밝은 색)
+    - LOW(0): 검정 도로 감지 (어두운 색)
     """
     if line_sensor:
-        line_info = line_sensor.get_line_position()
+        try:
+            line_info = line_sensor.get_line_position()
 
-        # 개별 센서 상태 확인 (예상: left_sensor, center_sensor, right_sensor)
-        if (
-            hasattr(line_info, "left_sensor")
-            and hasattr(line_info, "center_sensor")
-            and hasattr(line_info, "right_sensor")
-        ):
-            left_detected = line_info.left_sensor
-            center_detected = line_info.center_sensor
-            right_detected = line_info.right_sensor
-        else:
-            # 기존 position 기반 방식으로 fallback
-            position = line_info.get("position")
-            if position is None:
-                return "none"
-            elif position < -0.3:
-                left_detected, center_detected, right_detected = True, False, False
-            elif position > 0.3:
-                left_detected, center_detected, right_detected = False, False, True
-            else:
-                left_detected, center_detected, right_detected = False, True, False
+            # 센서 데이터가 딕셔너리 형태로 반환되는지 확인
+            if isinstance(line_info, dict):
+                sensors = line_info.get("sensors", {})
+                left_detected = sensors.get("left", False)
+                middle_detected = sensors.get("middle", False)
+                right_detected = sensors.get("right", False)
+                position = line_info.get("position")
 
-        # 도로폭 기반 판단 로직
-        if left_detected and not center_detected and not right_detected:
-            return "left"  # 왼쪽 경계선만 감지
-        elif not left_detected and center_detected and not right_detected:
-            return "center"  # 중앙 경계선 감지 (위험!)
-        elif not left_detected and not center_detected and right_detected:
-            return "right"  # 오른쪽 경계선만 감지
-        elif not left_detected and not center_detected and not right_detected:
-            return "none"  # 경계선 없음 (도로 중앙)
-        else:
-            # 복수 센서 감지 시 우선순위: center > left > right
-            if center_detected:
-                return "center"
-            elif left_detected:
-                return "left"
+                # 디버깅 정보 출력 (현재 설정값과 함께)
+                if hasattr(read_line, "debug_counter"):
+                    read_line.debug_counter += 1
+                else:
+                    read_line.debug_counter = 1
+
+                # 10번마다 한 번씩 센서 상태 출력
+                if read_line.debug_counter % 10 == 0:
+                    print(
+                        f"  [센서] L:{left_detected} M:{middle_detected} R:{right_detected} | Pos:{position} | Pattern:{line_info.get('pattern', 'N/A')}"
+                    )
+
+                # 노란색 도로선 회피 판단 (노란선을 피해서 검정 도로 위 주행)
+                if not left_detected and not middle_detected and not right_detected:
+                    return "safe_black_road"  # 노란선 없음 = 검정 도로 위 (안전)
+                elif not left_detected and middle_detected and not right_detected:
+                    return "yellow_center_danger"  # 중앙 노란선 밟음 = 위험! 즉시 회피
+                elif left_detected and not middle_detected and not right_detected:
+                    return "yellow_left_line"  # 왼쪽 노란선 감지 = 우측으로 회피
+                elif not left_detected and not middle_detected and right_detected:
+                    return "yellow_right_line"  # 오른쪽 노란선 감지 = 좌측으로 회피
+                elif left_detected and middle_detected and not right_detected:
+                    return "yellow_left_corner"  # 왼쪽 노란선 코너 = 강한 우회전
+                elif not left_detected and middle_detected and right_detected:
+                    return "yellow_right_corner"  # 오른쪽 노란선 코너 = 강한 좌회전
+                elif left_detected and not middle_detected and right_detected:
+                    return "narrow_road_yellow"  # 양쪽 노란선 = 좁은 도로, 신중히 직진
+                elif left_detected and middle_detected and right_detected:
+                    return "yellow_intersection"  # 모든 센서에 노란선 = 교차점
+                else:
+                    return "unknown"  # 알 수 없는 상태
             else:
-                return "right"
+                # 기존 position 기반 방식으로 fallback
+                position = (
+                    getattr(line_info, "position", None) or line_info.get("position")
+                    if hasattr(line_info, "get")
+                    else None
+                )
+                if position is None:
+                    return "safe_black_road"
+                elif position < -0.5:
+                    return "yellow_left_line"
+                elif position > 0.5:
+                    return "yellow_right_line"
+                else:
+                    return "yellow_center_danger"
+
+        except Exception as e:
+            print(f"라인 센서 읽기 오류: {e}")
+            return "safe_black_road"
     else:
         # 시뮬레이션
         import random
 
-        return random.choice(["left", "center", "right", "none"])
+        return random.choice(
+            [
+                "safe_black_road",
+                "yellow_left_line",
+                "yellow_right_line",
+                "yellow_center_danger",
+            ]
+        )
 
 
 def get_single_key():
@@ -195,7 +228,7 @@ def print_control_menu():
 
     print("\n🎯 속도 설정 용도:")
     print("  • 전진 속도: 직선 주행 시 사용")
-    print("  • 약한 회전: 라인 센서 center 감지 시 미세 조정")
+    print("  • 약한 회전: 라인 센서 center_left/center_right 감지 시 미세 조정")
     print("  • 강한 회전: 라인 센서 left/right 감지 시 빠른 회전")
     print("  • 안전 거리: 장애물 감지 최소 거리")
     print("  • 회피 시간: 장애물 회피 동작 지속 시간")
@@ -217,6 +250,10 @@ def print_control_menu():
     print("  7,8: 안전 거리 -5cm/+5cm")
     print("  9,0: 회피 시간 -0.1s/+0.1s")
 
+    print("\n🔍 디버깅 기능:")
+    print("  x: 라인 센서 상태 실시간 확인")
+    print("  z: 거리 센서 상태 확인")
+
     print("\n💡 팁:")
     print("  • 모든 키는 Enter 없이 즉시 반응 (s 제외)")
     print("  • 자동 주행 중에도 속도 실시간 조절 가능")
@@ -225,6 +262,7 @@ def print_control_menu():
     )
     print("  • p 키로 언제든 모든 동작 즉시 중단")
     print("  • q 키 또는 Ctrl+C로 설정값 표시 후 안전 종료")
+    print("  • x, z 키로 센서 상태 실시간 확인 가능")
     print("  h: 이 메뉴 다시 보기")
     print("=" * 70)
 
@@ -340,6 +378,12 @@ def handle_keyboard_input():
             elif key == "0":
                 current_avoid_time = min(20, current_avoid_time + 1)
                 print(f"\n✓ 회피 시간: {current_avoid_time/10:.1f}s")
+            elif key == "x":
+                print("\n🔍 라인 센서 상태 확인 중...")
+                show_line_sensor_status()
+            elif key == "z":
+                print("\n🔍 거리 센서 상태 확인 중...")
+                show_distance_sensor_status()
             elif key == "\x03":  # Ctrl+C 감지
                 print("\nCtrl+C 감지 - 안전 종료 중...")
                 running = False
@@ -356,11 +400,92 @@ def handle_keyboard_input():
             time.sleep(0.1)
 
 
+def show_line_sensor_status():
+    """라인 센서 상태 실시간 표시"""
+    print("=" * 50)
+    print("📍 라인 센서 상태 모니터링 (10초간)")
+    print("=" * 50)
+
+    if line_sensor:
+        start_time = time.time()
+        while time.time() - start_time < 10:
+            try:
+                line_info = line_sensor.get_line_position()
+                if isinstance(line_info, dict):
+                    sensors = line_info.get("sensors", {})
+                    left = sensors.get("left", False)
+                    middle = sensors.get("middle", False)
+                    right = sensors.get("right", False)
+                    position = line_info.get("position")
+                    pattern = line_info.get("pattern", "N/A")
+                    description = line_info.get("description", "N/A")
+
+                    print(
+                        f"\r센서: L[{'●' if left else '○'}] M[{'●' if middle else '○'}] R[{'●' if right else '○'}] | "
+                        f"위치: {position if position is not None else 'None':>5} | "
+                        f"패턴: {pattern} | {description:15s}",
+                        end="",
+                        flush=True,
+                    )
+                else:
+                    print(
+                        f"\r센서 데이터 형식 오류: {type(line_info)}",
+                        end="",
+                        flush=True,
+                    )
+                time.sleep(0.2)
+            except Exception as e:
+                print(f"\r센서 읽기 오류: {e}", end="", flush=True)
+                break
+    else:
+        print("시뮬레이션 모드 - 실제 센서 없음")
+
+    print("\n" + "=" * 50)
+
+
+def show_distance_sensor_status():
+    """거리 센서 상태 실시간 표시"""
+    print("=" * 50)
+    print("📏 거리 센서 상태 모니터링 (10초간)")
+    print("=" * 50)
+
+    if ultrasonic:
+        start_time = time.time()
+        distances = []
+        while time.time() - start_time < 10:
+            try:
+                distance = ultrasonic.measure_distance()
+                if distance:
+                    distances.append(distance)
+                    avg_distance = sum(distances[-10:]) / len(
+                        distances[-10:]
+                    )  # 최근 10개 평균
+                    status = (
+                        "🚫 장애물!" if distance < current_safe_distance else "✅ 안전"
+                    )
+
+                    print(
+                        f"\r현재 거리: {distance:5.1f}cm | 평균: {avg_distance:5.1f}cm | "
+                        f"안전거리: {current_safe_distance}cm | {status}",
+                        end="",
+                        flush=True,
+                    )
+                else:
+                    print(f"\r거리 측정 실패", end="", flush=True)
+                time.sleep(0.3)
+            except Exception as e:
+                print(f"\r거리 센서 오류: {e}", end="", flush=True)
+                break
+    else:
+        print("시뮬레이션 모드 - 실제 센서 없음")
+
+    print("\n" + "=" * 50)
+
+
 def read_distance():
     """앞의 거리 읽기"""
     if ultrasonic:
         distance = ultrasonic.measure_distance()
-        print(f"Distance: {distance}")
         return distance if distance else 999
     else:
         # 시뮬레이션
@@ -368,11 +493,9 @@ def read_distance():
 
         if random.random() < 0.1:  # 10% obstacle chance
             distance = random.randint(5, current_safe_distance - 1)
-            print(f"Sim obstacle distance: {distance}cm")
             return distance
         else:
             distance = random.randint(current_safe_distance + 10, 100)
-            print(f"Sim safe distance: {distance}cm")
             return distance
 
 
@@ -552,55 +675,97 @@ def avoid_obstacle():
 
 def drive():
     """
-    스마트 도로폭 기반 주행 함수
-    - 20cm 도로폭에서 경계선을 피해 중앙 유지
-    - center 센서 감지 시 이전 방향 기반 회피
+    노란색 도로선 회피 주행 함수
+    - 노란색 선(도로선)을 피해서 검정색 도로 위를 안전하게 주행
+    - 노란선 감지 시 즉시 회피, 노란선 없으면 검정 도로에서 안전하게 직진
     """
     global last_turn_direction, turn_recovery_count
 
     # 1단계: 장애물 확인 (현재 안전거리 사용)
     distance = read_distance()
     if distance < current_safe_distance:
-        print(f"Obstacle detected at {distance}cm (safe: {current_safe_distance}cm)")
+        print(f"🚫 장애물 감지 {distance}cm (안전거리: {current_safe_distance}cm)")
         avoid_obstacle()
         return
 
-    # 2단계: 도로폭 기반 라인 추적
-    line_position = read_line()
-    print(f"Line position: {line_position}, Last turn: {last_turn_direction}")
+    # 2단계: 노란색 도로선 회피 주행
+    road_status = read_line()
+    print(f"🛣️ 도로 상태: {road_status}, 이전 방향: {last_turn_direction}")
 
-    if line_position == "none":
-        # 경계선 없음 = 도로 중앙 (이상적)
+    if road_status == "safe_black_road":
+        # 노란선 없음 = 검정 도로 위 안전 구간
+        print("  ✅ 검정 도로 위 안전 - 직진")
         go_forward()
-        turn_recovery_count += 1
+        last_turn_direction = "none"
+        turn_recovery_count = 0
 
-        # 복구 카운터가 5 이상이면 방향 상태 리셋
-        if turn_recovery_count >= 5:
-            last_turn_direction = "none"
-            turn_recovery_count = 0
+    elif road_status == "yellow_center_danger":
+        # 중앙 노란선 밟음 = 매우 위험! 즉시 회피
+        print("  ⚠️ 노란선 밟음! 즉시 검정 도로로 회피")
+        if last_turn_direction == "left":
+            print("    → 이전 좌회전 기록 - 우측으로 강한 회피")
+            turn_right()
+        elif last_turn_direction == "right":
+            print("    → 이전 우회전 기록 - 좌측으로 강한 회피")
+            turn_left()
+        else:
+            print("    → 기본 우측 회피 (검정 도로로)")
+            turn_right()
+        turn_recovery_count = 0
 
-    elif line_position == "left":
-        # 왼쪽 경계선 감지 → 오른쪽으로 회피 (잠깐 턴 후 중앙으로)
+    elif road_status == "yellow_left_line":
+        # 왼쪽 노란선 감지 = 우측으로 회피 (검정 도로 중앙으로)
+        print("  ↪️ 왼쪽 노란선 감지 - 우측으로 회피")
         turn_right()
 
-    elif line_position == "right":
-        # 오른쪽 경계선 감지 → 왼쪽으로 회피 (잠깐 턴 후 중앙으로)
+    elif road_status == "yellow_right_line":
+        # 오른쪽 노란선 감지 = 좌측으로 회피 (검정 도로 중앙으로)
+        print("  ↩️ 오른쪽 노란선 감지 - 좌측으로 회피")
         turn_left()
 
-    elif line_position == "center":
-        # 중앙 경계선 감지 (위험!) → 이전 방향 반대로 회피
-        if last_turn_direction == "left":
-            # 왼쪽에서 오다가 중앙선 감지 → 오른쪽으로 회피
-            slight_right()
-            print("Center detected after left turn - avoiding right")
-        elif last_turn_direction == "right":
-            # 오른쪽에서 오다가 중앙선 감지 → 왼쪽으로 회피
-            slight_left()
-            print("Center detected after right turn - avoiding left")
+    elif road_status == "yellow_left_corner":
+        # 왼쪽 노란선 코너 = 강한 우회전으로 검정 도로 중앙 복귀
+        print("  🔄 왼쪽 노란선 코너 - 강한 우회전")
+        turn_right()
+        last_turn_direction = "right"
+        turn_recovery_count = 0
+
+    elif road_status == "yellow_right_corner":
+        # 오른쪽 노란선 코너 = 강한 좌회전으로 검정 도로 중앙 복귀
+        print("  🔄 오른쪽 노란선 코너 - 강한 좌회전")
+        turn_left()
+        last_turn_direction = "left"
+        turn_recovery_count = 0
+
+    elif road_status == "narrow_road_yellow":
+        # 양쪽 노란선 = 좁은 검정 도로, 신중하게 직진
+        print("  🚧 좁은 검정 도로 - 천천히 중앙으로 직진")
+        # 속도를 줄여서 안전하게 직진
+        if motor:
+            motor.set_motor_speed("A", current_forward_speed // 2)
+            motor.set_motor_speed("B", current_forward_speed // 2)
+            print(f"    → 속도 감소: {current_forward_speed // 2}%")
         else:
-            # 방향 히스토리 없음 → 기본적으로 오른쪽 회피
-            slight_right()
-            print("Center detected with no history - default right avoidance")
+            print(f"    → 시뮬레이션: 속도 감소 {current_forward_speed // 2}%")
+        turn_recovery_count = 0
+
+    elif road_status == "yellow_intersection":
+        # 모든 센서에 노란선 = 교차점
+        print("  🚦 노란선 교차점 감지 - 신중하게 직진")
+        # 교차점에서는 속도를 줄이고 직진
+        if motor:
+            motor.set_motor_speed("A", current_forward_speed // 3)
+            motor.set_motor_speed("B", current_forward_speed // 3)
+            print(f"    → 교차점 속도: {current_forward_speed // 3}%")
+        else:
+            print(f"    → 시뮬레이션: 교차점 속도 {current_forward_speed // 3}%")
+        turn_recovery_count = 0
+
+    else:
+        # 알 수 없는 상태
+        print(f"  ❓ 알 수 없는 도로 상태: {road_status} - 정지")
+        stop()
+        time.sleep(0.5)
 
 
 def emergency_stop():
@@ -729,15 +894,17 @@ def main():
     """메인 함수 (키보드 제어)"""
     global running, autonomous_mode
 
-    print("Ultra Simple Autonomous Car - 키보드 제어 버전")
-    print("=" * 50)
-    print("Features: Line following + Obstacle avoidance + Keyboard control")
-    print("Initial Settings:")
-    print(f"  Forward speed: {FORWARD_SPEED}%")
-    print(f"  Turn speeds: Low={LOW_TURN_SPEED}%, High={HIGH_TURN_SPEED}%")
-    print(f"  Safe distance: {SAFE_DISTANCE}cm")
-    print(f"  Avoid time: {AVOID_TIME}s")
-    print("=" * 50)
+    print("Ultra Simple Autonomous Car - 노란선 회피 주행 버전")
+    print("=" * 60)
+    print("🛣️ 도로: 검정색 / 도로선: 노란색")
+    print("🎯 기능: 노란선 회피 + 장애물 회피 + 키보드 제어")
+    print("=" * 60)
+    print("초기 설정:")
+    print(f"  🚗 전진 속도: {FORWARD_SPEED}%")
+    print(f"  🔄 회전 속도: 약함={LOW_TURN_SPEED}%, 강함={HIGH_TURN_SPEED}%")
+    print(f"  🛡️ 안전 거리: {SAFE_DISTANCE}cm")
+    print(f"  ⏱️ 회피 시간: {AVOID_TIME}s")
+    print("=" * 60)
 
     if not setup():
         print("Setup failed")
