@@ -34,11 +34,14 @@ except ImportError:
     SIMULATION = True
 
 # 설정값 (키보드로 실시간 조절 가능)
-FORWARD_SPEED = 100  # 직진 속도
+FORWARD_SPEED = 80  # 직진 속도
 LOW_TURN_SPEED = 50  # 약한 회전 속도
 HIGH_TURN_SPEED = 80  # 강한 회전 속도
 SAFE_DISTANCE = 15  # 장애물 안전 거리 (cm)
 AVOID_TIME = 0.6  # 회피 동작 시간 (초)
+AUTO_LOOP_INTERVAL = 0.01  # 자동 주행 루프 간격(초) - 반응 속도 향상
+SLIGHT_TURN_THRESHOLD = 2  # 약한 조향 유지 횟수 임계(지속 감지 시 강한 조향)
+SLOW_FORWARD_DIVISOR = 2  # 양쪽 감지 시 전진 속도 나눔 값
 
 MOTOR_SLEEP_TIME = 0.3
 
@@ -50,6 +53,18 @@ ultrasonic = None
 # 도로폭 기반 라인 추적을 위한 방향 상태 추적
 last_turn_direction = "none"  # "left", "right", "none"
 turn_recovery_count = 0  # 턴 후 복구 카운터
+last_line_status = "none"  # 자동 주행 상태 변화 감지용
+
+# 모터 캐시(불필요한 반복 전송 방지로 반응성 향상)
+_last_right_speed = None
+_last_left_speed = None
+
+# 감지 지속 카운터(히스테리시스)
+_cnt_left = 0
+_cnt_right = 0
+_cnt_center = 0
+_cnt_none = 0
+_cnt_both = 0
 
 # 키보드 제어를 위한 전역 변수
 autonomous_mode = False  # 자동 주행 모드 (False: 수동, True: 자동)
@@ -83,18 +98,28 @@ def setup():
         return True
 
 
+def set_motor_speeds_quiet(right_speed: int, left_speed: int):
+    """중복 설정을 피하며 모터 속도를 설정 (반응성 향상)"""
+    global _last_right_speed, _last_left_speed
+    try:
+        if not motor:
+            return
+        # 변경이 없으면 전송 생략
+        if right_speed == _last_right_speed and left_speed == _last_left_speed:
+            return
+        motor.set_motor_speed("A", right_speed)
+        motor.set_motor_speed("B", left_speed)
+        _last_right_speed = right_speed
+        _last_left_speed = left_speed
+    except Exception as _:
+        pass
+
+
 def read_line():
     """
-    노란색 도로선 감지 및 회피 주행 - 검정색 도로 위에서 노란색 선을 피해 주행
-    - left: 왼쪽 노란선 감지 → 우측으로 회피 (도로 중앙으로)
-    - center: 중앙 노란선 감지 → 위험! 즉시 회피 (선을 밟고 있음)
-    - right: 오른쪽 노란선 감지 → 좌측으로 회피 (도로 중앙으로)
-    - none: 노란선 없음 → 검정 도로 위 안전, 직진
-    - mixed: 복합 상황 (교차점, 코너 등)
-
-    센서 동작:
-    - HIGH(1): 노란선 감지 (밝은 색)
-    - LOW(0): 검정 도로 감지 (어두운 색)
+    단순 차선 유지용 감지 결과 반환
+    - 센서 의미: HIGH(1)=검은 바닥, LOW(0)=노란 라인
+    - 반환값: left_line | right_line | center_line | both_lines | none
     """
     if line_sensor:
         try:
@@ -103,73 +128,43 @@ def read_line():
             # 센서 데이터가 딕셔너리 형태로 반환되는지 확인
             if isinstance(line_info, dict):
                 sensors = line_info.get("sensors", {})
-                left_detected = sensors.get("left", False)
-                middle_detected = sensors.get("middle", False)
-                right_detected = sensors.get("right", False)
-                position = line_info.get("position")
+                left = int(sensors.get("left", 1))
+                middle = int(sensors.get("middle", 1))
+                right = int(sensors.get("right", 1))
 
-                # 디버깅 정보 출력 (현재 설정값과 함께)
-                if hasattr(read_line, "debug_counter"):
-                    read_line.debug_counter += 1
-                else:
-                    read_line.debug_counter = 1
+                # LOW(0) = 노란 라인 감지
+                if middle == 0:
+                    return "center_line"
+                if left == 0 and right == 0:
+                    return "both_lines"
+                if left == 0:
+                    return "left_line"
+                if right == 0:
+                    return "right_line"
+                return "none"
 
-                # 10번마다 한 번씩 센서 상태 출력
-                if read_line.debug_counter % 10 == 0:
-                    print(
-                        f"  [센서] L:{left_detected} M:{middle_detected} R:{right_detected} | Pos:{position} | Pattern:{line_info.get('pattern', 'N/A')}"
-                    )
-
-                # 노란색 도로선 회피 판단 (노란선을 피해서 검정 도로 위 주행)
-                if not left_detected and not middle_detected and not right_detected:
-                    return "safe_black_road"  # 노란선 없음 = 검정 도로 위 (안전)
-                elif not left_detected and middle_detected and not right_detected:
-                    return "yellow_center_danger"  # 중앙 노란선 밟음 = 위험! 즉시 회피
-                elif left_detected and not middle_detected and not right_detected:
-                    return "yellow_left_line"  # 왼쪽 노란선 감지 = 우측으로 회피
-                elif not left_detected and not middle_detected and right_detected:
-                    return "yellow_right_line"  # 오른쪽 노란선 감지 = 좌측으로 회피
-                elif left_detected and middle_detected and not right_detected:
-                    return "yellow_left_corner"  # 왼쪽 노란선 코너 = 강한 우회전
-                elif not left_detected and middle_detected and right_detected:
-                    return "yellow_right_corner"  # 오른쪽 노란선 코너 = 강한 좌회전
-                elif left_detected and not middle_detected and right_detected:
-                    return "narrow_road_yellow"  # 양쪽 노란선 = 좁은 도로, 신중히 직진
-                elif left_detected and middle_detected and right_detected:
-                    return "yellow_intersection"  # 모든 센서에 노란선 = 교차점
-                else:
-                    return "unknown"  # 알 수 없는 상태
-            else:
-                # 기존 position 기반 방식으로 fallback
-                position = (
-                    getattr(line_info, "position", None) or line_info.get("position")
-                    if hasattr(line_info, "get")
-                    else None
-                )
-                if position is None:
-                    return "safe_black_road"
-                elif position < -0.5:
-                    return "yellow_left_line"
-                elif position > 0.5:
-                    return "yellow_right_line"
-                else:
-                    return "yellow_center_danger"
+            # fallback: 위치 기반(-1=좌, 0=중앙, 1=우)
+            position = (
+                getattr(line_info, "position", None) or line_info.get("position")
+                if hasattr(line_info, "get")
+                else None
+            )
+            if position is None:
+                return "none"
+            if position <= -0.25:
+                return "left_line"
+            if position >= 0.25:
+                return "right_line"
+            return "center_line"
 
         except Exception as e:
             print(f"라인 센서 읽기 오류: {e}")
-            return "safe_black_road"
+            return "none"
     else:
         # 시뮬레이션
         import random
 
-        return random.choice(
-            [
-                "safe_black_road",
-                "yellow_left_line",
-                "yellow_right_line",
-                "yellow_center_danger",
-            ]
-        )
+        return random.choice(["none", "left_line", "right_line", "center_line"])
 
 
 def get_single_key():
@@ -275,6 +270,7 @@ def print_control_menu():
 
     print(f"\n🎮 수동 조작 (정지 상태에서만, {MOTOR_SLEEP_TIME}초 동작 후 자동 정지):")
     print("  ↑ 또는 w: 전진 (현재 전진 속도로)")
+    print("  ↓ 또는 s: 후진 (현재 전진 속도로)")
     print("  ← 또는 a: 좌회전 (현재 강한 회전 속도로)")
     print("  → 또는 d: 우회전 (현재 강한 회전 속도로)")
 
@@ -288,6 +284,7 @@ def print_control_menu():
     print("\n🔍 디버깅 기능:")
     print("  x: 라인 센서 상태 실시간 확인")
     print("  z: 거리 센서 상태 확인")
+    print("  t: 조향 테스트 시퀀스 실행")
 
     print("\n💡 팁:")
     print("  • 대부분의 키는 Enter 없이 즉시 반응, 자동 시작은 Enter 키")
@@ -362,11 +359,17 @@ def handle_keyboard_input():
                 else:
                     manual_control_active = True
                     print("수동 모드에서 모든 동작 정지")
-            elif key in ["w", "a", "d", "up", "left", "right"] and not autonomous_mode:
+            elif (
+                key in ["w", "a", "d", "s", "up", "down", "left", "right"]
+                and not autonomous_mode
+            ):
                 manual_control_active = True
                 if key in ["w", "up"]:
                     print("\n🔼 수동 전진")
                     manual_forward()
+                elif key in ["s", "down"]:
+                    print("\n🔽 수동 후진")
+                    manual_backward()
                 elif key in ["a", "left"]:
                     print("\n◀️ 수동 좌회전")
                     manual_turn_left()
@@ -410,6 +413,9 @@ def handle_keyboard_input():
             elif key == "z":
                 print("\n🔍 거리 센서 상태 확인 중...")
                 show_distance_sensor_status()
+            elif key == "t":
+                print("\n🧪 조향 테스트 시퀀스 시작")
+                test_steering_sequence()
             elif key == "\x03":  # Ctrl+C 감지
                 print("\nCtrl+C 감지 - 안전 종료 중...")
                 running = False
@@ -469,6 +475,54 @@ def show_line_sensor_status(duration_seconds: int = 20):
     print("\n" + "=" * 50)
 
 
+def test_steering_sequence():
+    """조향 테스트: 좌→우→약좌→약우→전진→후진 순서로 각각 0.5s 동작"""
+    seq = [
+        ("left", 0.5),
+        ("right", 0.5),
+        ("slight_left", 0.5),
+        ("slight_right", 0.5),
+        ("forward", 0.5),
+        ("backward", 0.5),
+        ("stop", 0.0),
+    ]
+    for action, dur in seq:
+        if dur > 0:
+            drive_motion(action, dur, label="테스트")
+        else:
+            drive_motion(action)
+        time.sleep(0.2)
+
+
+def get_line_sensor_snapshot(prefix: str = "센서") -> str:
+    """라인 센서 스냅샷을 한 줄 텍스트로 반환 (수동 디버깅용)"""
+    try:
+        if line_sensor:
+            info = line_sensor.get_line_position()
+            if isinstance(info, dict):
+                sensors = info.get("sensors", {})
+                left = int(sensors.get("left", 1))
+                middle = int(sensors.get("middle", 1))
+                right = int(sensors.get("right", 1))
+                pattern = info.get("pattern", f"{left}{middle}{right}")
+                position = info.get("position")
+            else:
+                left = middle = right = 1
+                pattern = "N/A"
+                position = None
+
+            simple = read_line()
+            return (
+                f"{prefix}: 상태={simple} | "
+                f"L[{'●' if left else '○'}] M[{'●' if middle else '○'}] R[{'●' if right else '○'}] | "
+                f"패턴:{pattern} | 위치:{position if position is not None else 'None'}"
+            )
+        else:
+            return f"{prefix}: 시뮬레이션 - 실제 센서 없음"
+    except Exception as e:
+        return f"{prefix}: 센서 오류: {e}"
+
+
 def show_distance_sensor_status():
     """거리 센서 상태 실시간 표시"""
     print("=" * 50)
@@ -506,6 +560,45 @@ def show_distance_sensor_status():
         print("시뮬레이션 모드 - 실제 센서 없음")
 
     print("\n" + "=" * 50)
+
+
+def drive_motion(action: str, duration_seconds: float = None, label: str = "수동"):
+    """자동/수동 공용 모터 제어 함수
+    - action: forward | backward | left | right | slight_left | slight_right | stop
+    - duration_seconds: 지정 시 해당 시간 동작 후 정지 및 스냅샷 출력
+    - label: 로그용 접두사
+    """
+    try:
+        if action == "forward":
+            go_forward()
+        elif action == "backward":
+            if motor:
+                set_motor_speeds_quiet(-current_forward_speed, -current_forward_speed)
+            else:
+                print(f"Simulation: Backward at {current_forward_speed}%")
+        elif action == "left":
+            turn_left()
+        elif action == "right":
+            turn_right()
+        elif action == "slight_left":
+            slight_left()
+        elif action == "slight_right":
+            slight_right()
+        elif action == "stop":
+            set_motor_speeds_quiet(0, 0)
+        else:
+            print(f"알 수 없는 동작: {action}")
+            return
+
+        if duration_seconds is not None:
+            print(get_line_sensor_snapshot(f"[{label} {action}-이전]"))
+            time.sleep(duration_seconds)
+            set_motor_speeds_quiet(0, 0)
+            print(f"⏹️ {label} {action} 정지")
+            print(get_line_sensor_snapshot(f"[{label} {action}-이후]"))
+
+    except Exception as e:
+        print(f"모터 제어 오류({action}): {e}")
 
 
 def read_distance():
@@ -563,8 +656,7 @@ def print_runtime_status(context: str):
 def go_forward():
     """직진 (현재 설정값 사용)"""
     if motor:
-        motor.set_motor_speed("A", current_forward_speed)  # 오른쪽
-        motor.set_motor_speed("B", current_forward_speed)  # 왼쪽
+        set_motor_speeds_quiet(current_forward_speed, current_forward_speed)
         print(f"Forward at {current_forward_speed}%")
     else:
         print(f"Simulation: Forward at {current_forward_speed}%")
@@ -575,8 +667,7 @@ def turn_left():
     global last_turn_direction, turn_recovery_count
 
     if motor:
-        motor.set_motor_speed("A", current_high_turn_speed)  # 오른쪽: 앞으로
-        motor.set_motor_speed("B", -current_low_turn_speed)  # 왼쪽: 뒤로
+        set_motor_speeds_quiet(current_high_turn_speed, -20)
         print(f"Turn left (R:{current_high_turn_speed}%, L:-{current_low_turn_speed}%)")
     else:
         print(
@@ -592,8 +683,7 @@ def turn_right():
     global last_turn_direction, turn_recovery_count
 
     if motor:
-        motor.set_motor_speed("A", -current_low_turn_speed)  # 오른쪽: 뒤로
-        motor.set_motor_speed("B", current_high_turn_speed)  # 왼쪽: 앞으로
+        set_motor_speeds_quiet(0, current_high_turn_speed + 10)
         print(
             f"Turn right (R:-{current_low_turn_speed}%, L:{current_high_turn_speed}%)"
         )
@@ -608,38 +698,34 @@ def turn_right():
 
 def slight_left():
     """약한 좌회전 (중앙선 회피용) - 현재 설정값 사용"""
+    global last_turn_direction
     if motor:
-        motor.set_motor_speed("A", current_forward_speed)  # 오른쪽: 정상 속도
-        motor.set_motor_speed("B", current_low_turn_speed)  # 왼쪽: 낮은 속도
+        set_motor_speeds_quiet(current_forward_speed, current_low_turn_speed)
         print(f"Slight left (R:{current_forward_speed}%, L:{current_low_turn_speed}%)")
     else:
         print(
             f"Simulation: Slight left (R:{current_forward_speed}%, L:{current_low_turn_speed}%)"
         )
+    last_turn_direction = "left"
 
 
 def slight_right():
     """약한 우회전 (중앙선 회피용) - 현재 설정값 사용"""
+    global last_turn_direction
     if motor:
-        motor.set_motor_speed("A", current_low_turn_speed)  # 오른쪽: 낮은 속도
-        motor.set_motor_speed("B", current_forward_speed)  # 왼쪽: 정상 속도
+        set_motor_speeds_quiet(current_low_turn_speed, current_forward_speed)
         print(f"Slight right (R:{current_low_turn_speed}%, L:{current_forward_speed}%)")
     else:
         print(
             f"Simulation: Slight right (R:{current_low_turn_speed}%, L:{current_forward_speed}%)"
         )
+    last_turn_direction = "right"
 
 
 def manual_forward():
     """수동 전진 (1초 동작 후 자동 정지)"""
     if motor:
-        motor.set_motor_speed("A", current_forward_speed)
-        motor.set_motor_speed("B", current_forward_speed)
-        print(f"🔼 전진 {current_forward_speed}% - {MOTOR_SLEEP_TIME}초 후 자동 정지")
-        print_runtime_status("수동 전진")
-        time.sleep(MOTOR_SLEEP_TIME)
-        motor.motor_stop()
-        print("⏹️ 전진 정지")
+        drive_motion("forward", MOTOR_SLEEP_TIME, label="수동")
     else:
         print(
             f"Simulation: Forward at {current_forward_speed}% for {MOTOR_SLEEP_TIME} second"
@@ -651,13 +737,7 @@ def manual_forward():
 def manual_backward():
     """수동 후진 (1초 동작 후 자동 정지)"""
     if motor:
-        motor.set_motor_speed("A", -current_forward_speed)
-        motor.set_motor_speed("B", -current_forward_speed)
-        print(f"🔽 후진 {current_forward_speed}% - {MOTOR_SLEEP_TIME}초 후 자동 정지")
-        print_runtime_status("수동 후진")
-        time.sleep(MOTOR_SLEEP_TIME)
-        motor.motor_stop()
-        print("⏹️ 후진 정지")
+        drive_motion("backward", MOTOR_SLEEP_TIME, label="수동")
     else:
         print(
             f"Simulation: Backward at {current_forward_speed}% for {MOTOR_SLEEP_TIME} second"
@@ -669,16 +749,7 @@ def manual_backward():
 def manual_turn_left():
     """수동 좌회전 (1초 동작 후 자동 정지)"""
     if motor:
-        # 앞으로 좌회전: 오른쪽 바퀴 강한 전진, 왼쪽 바퀴 약한 후진
-        motor.set_motor_speed("A", current_high_turn_speed)
-        motor.set_motor_speed("B", -current_low_turn_speed)
-        print(
-            f"◀️ 좌회전 (오른쪽 강전진 {current_high_turn_speed}%, 왼쪽 약후진 {current_low_turn_speed}%) - {MOTOR_SLEEP_TIME}초 후 자동 정지"
-        )
-        print_runtime_status("수동 좌회전")
-        time.sleep(MOTOR_SLEEP_TIME)
-        motor.motor_stop()
-        print("⏹️ 좌회전 정지")
+        drive_motion("left", MOTOR_SLEEP_TIME, label="수동")
     else:
         print(
             f"Simulation: Turn left at {current_high_turn_speed}% for {MOTOR_SLEEP_TIME} second"
@@ -690,16 +761,7 @@ def manual_turn_left():
 def manual_turn_right():
     """수동 우회전 (1초 동작 후 자동 정지)"""
     if motor:
-        # 앞으로 우회전: 왼쪽 바퀴 강한 전진, 오른쪽 바퀴 약한 후진
-        motor.set_motor_speed("A", -current_low_turn_speed)
-        motor.set_motor_speed("B", current_high_turn_speed)
-        print(
-            f"▶️ 우회전 (왼쪽 강전진 {current_high_turn_speed}%, 오른쪽 약후진 {current_low_turn_speed}%) - {MOTOR_SLEEP_TIME}초 후 자동 정지"
-        )
-        print_runtime_status("수동 우회전")
-        time.sleep(MOTOR_SLEEP_TIME)
-        motor.motor_stop()
-        print("⏹️ 우회전 정지")
+        drive_motion("right", MOTOR_SLEEP_TIME, label="수동")
     else:
         print(
             f"Simulation: Turn right at {current_high_turn_speed}% for {MOTOR_SLEEP_TIME} second"
@@ -733,101 +795,85 @@ def avoid_obstacle():
 
 def drive():
     """
-    노란색 도로선 회피 주행 함수
-    - 노란색 선(도로선)을 피해서 검정색 도로 위를 안전하게 주행
-    - 노란선 감지 시 즉시 회피, 노란선 없으면 검정 도로에서 안전하게 직진
+    차선 유지 주행 (가이드 반영)
+    - 왼쪽 센서 라인 감지 → 우측 조향(벗어나지 않도록)
+    - 오른쪽 센서 라인 감지 → 좌측 조향
+    - 중앙 센서 라인 감지 → 선 이탈 직전 → 직전 조향의 반대로 복귀
+    - 양쪽 감지 → 차선 사이 직진(감속)
+    - 미감지 → 직진 유지
     """
     global last_turn_direction, turn_recovery_count
+    global _cnt_left, _cnt_right, _cnt_center, _cnt_none, _cnt_both
 
-    # 1단계: 장애물 확인 (현재 안전거리 사용)
+    # 1) 장애물 확인
     distance = read_distance()
     if distance < current_safe_distance:
         print(f"🚫 장애물 감지 {distance}cm (안전거리: {current_safe_distance}cm)")
         avoid_obstacle()
         return
 
-    # 2단계: 노란색 도로선 회피 주행
-    road_status = read_line()
-    print(f"🛣️ 도로 상태: {road_status}, 이전 방향: {last_turn_direction}")
+    # 2) 차선 유지 로직
+    status = read_line()
+    global last_line_status
+    if status != last_line_status:
+        print(f"🛣️ 라인 상태: {status}, 이전 방향: {last_turn_direction}")
+        last_line_status = status
 
-    if road_status == "safe_black_road":
-        # 노란선 없음 = 검정 도로 위 안전 구간
-        print("  ✅ 검정 도로 위 안전 - 직진")
-        go_forward()
-        last_turn_direction = "none"
-        turn_recovery_count = 0
+    # 카운터 업데이트 (히스테리시스)
+    _cnt_left = _cnt_left + 1 if status == "left_line" else 0
+    _cnt_right = _cnt_right + 1 if status == "right_line" else 0
+    _cnt_center = _cnt_center + 1 if status == "center_line" else 0
+    _cnt_both = _cnt_both + 1 if status == "both_lines" else 0
+    _cnt_none = _cnt_none + 1 if status == "none" else 0
 
-    elif road_status == "yellow_center_danger":
-        # 중앙 노란선 밟음 = 매우 위험! 즉시 회피
-        print("  ⚠️ 노란선 밟음! 즉시 검정 도로로 회피")
-        if last_turn_direction == "left":
-            print("    → 이전 좌회전 기록 - 우측으로 강한 회피")
+    # 동작 결정
+    if status == "left_line":
+        # 직진하면 좌측 차선을 밟으므로 우측으로 이동
+        if _cnt_left >= SLIGHT_TURN_THRESHOLD:
             turn_right()
-        elif last_turn_direction == "right":
-            print("    → 이전 우회전 기록 - 좌측으로 강한 회피")
+        else:
+            slight_right()
+        return
+
+    if status == "right_line":
+        if _cnt_right >= SLIGHT_TURN_THRESHOLD:
             turn_left()
         else:
-            print("    → 기본 우측 회피 (검정 도로로)")
+            slight_left()
+        return
+
+    if status == "center_line":
+        # 선 이탈 직전, '직전 조향'이 아니라 '직전 감지 상태'의 반대 방향으로 복귀
+        # last_line_status 기준: left_line 감지 후 중앙이면 우측, right_line 감지 후 중앙이면 좌측
+        if last_line_status == "left_line":
             turn_right()
-        turn_recovery_count = 0
-
-    elif road_status == "yellow_left_line":
-        # 왼쪽 노란선 감지 = 우측으로 회피 (검정 도로 중앙으로)
-        print("  ↪️ 왼쪽 노란선 감지 - 우측으로 회피")
-        turn_right()
-        # 반대 방향 유지로 빠져나오기 지원
-        time.sleep(0.5)
-
-    elif road_status == "yellow_right_line":
-        # 오른쪽 노란선 감지 = 좌측으로 회피 (검정 도로 중앙으로)
-        print("  ↩️ 오른쪽 노란선 감지 - 좌측으로 회피")
-        turn_left()
-        # 반대 방향 유지로 빠져나오기 지원
-        time.sleep(0.5)
-
-    elif road_status == "yellow_left_corner":
-        # 왼쪽 노란선 코너 = 강한 우회전으로 검정 도로 중앙 복귀
-        print("  🔄 왼쪽 노란선 코너 - 강한 우회전")
-        turn_right()
-        last_turn_direction = "right"
-        turn_recovery_count = 0
-
-    elif road_status == "yellow_right_corner":
-        # 오른쪽 노란선 코너 = 강한 좌회전으로 검정 도로 중앙 복귀
-        print("  🔄 오른쪽 노란선 코너 - 강한 좌회전")
-        turn_left()
-        last_turn_direction = "left"
-        turn_recovery_count = 0
-
-    elif road_status == "narrow_road_yellow":
-        # 양쪽 노란선 = 좁은 검정 도로, 신중하게 직진
-        print("  🚧 좁은 검정 도로 - 천천히 중앙으로 직진")
-        # 속도를 줄여서 안전하게 직진
-        if motor:
-            motor.set_motor_speed("A", current_forward_speed // 2)
-            motor.set_motor_speed("B", current_forward_speed // 2)
-            print(f"    → 속도 감소: {current_forward_speed // 2}%")
+        elif last_line_status == "right_line":
+            turn_left()
         else:
-            print(f"    → 시뮬레이션: 속도 감소 {current_forward_speed // 2}%")
-        turn_recovery_count = 0
+            # 불확실하면 마지막 조향의 반대로 시도
+            if last_turn_direction == "left":
+                turn_right()
+            elif last_turn_direction == "right":
+                turn_left()
+            else:
+                slight_right()
+        return
 
-    elif road_status == "yellow_intersection":
-        # 모든 센서에 노란선 = 교차점
-        print("  🚦 노란선 교차점 감지 - 신중하게 직진")
-        # 교차점에서는 속도를 줄이고 직진
+    if status == "both_lines":
+        # 차선 사이 중앙. 속도를 낮춰 안정 직진
         if motor:
-            motor.set_motor_speed("A", current_forward_speed // 3)
-            motor.set_motor_speed("B", current_forward_speed // 3)
-            print(f"    → 교차점 속도: {current_forward_speed // 3}%")
+            set_motor_speeds_quiet(
+                current_forward_speed // SLOW_FORWARD_DIVISOR,
+                current_forward_speed // SLOW_FORWARD_DIVISOR,
+            )
         else:
-            print(f"    → 시뮬레이션: 교차점 속도 {current_forward_speed // 3}%")
-        turn_recovery_count = 0
+            pass
+        return
 
-    else:
-        # 알 수 없는 상태
-        print(f"  ❓ 알 수 없는 도로 상태: {road_status} - 정지")
-        stop()
-        time.sleep(0.5)
+    # none: 둘 다 감지되지 않음 → 직진 유지
+    go_forward()
+    last_turn_direction = "none"
+    turn_recovery_count = 0
 
 
 def emergency_stop():
@@ -956,10 +1002,11 @@ def main():
     """메인 함수 (키보드 제어)"""
     global running, autonomous_mode
 
-    print("Ultra Simple Autonomous Car - 노란선 회피 주행 버전")
+    print("Ultra Simple Autonomous Car - 노란선 추적 주행 버전")
     print("=" * 60)
-    print("🛣️ 도로: 검정색 / 도로선: 노란색")
-    print("🎯 기능: 노란선 회피 + 장애물 회피 + 키보드 제어")
+    print("🛣️ 도로: 검정색 / 라인: 노란색")
+    print("🎯 기능: 노란선 추적 + 장애물 회피 + 키보드 제어")
+    print("🔧 센서: test_line_sensors.py 로직 기반 정확한 라인 감지")
     print("=" * 60)
     print("초기 설정:")
     print(f"  🚗 전진 속도: {FORWARD_SPEED}%")
@@ -987,9 +1034,9 @@ def main():
         while running:
             try:
                 if autonomous_mode:
-                    # 자동 주행 모드 (현재 설정값 실시간 반영)
+                    # 자동 주행 모드 (더 빠른 루프)
                     drive()
-                    time.sleep(0.05)
+                    time.sleep(AUTO_LOOP_INTERVAL)
                 else:
                     # 수동 모드 - 키보드 입력만 처리
                     time.sleep(0.02)

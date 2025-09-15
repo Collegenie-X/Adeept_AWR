@@ -2,14 +2,19 @@
 # -*- coding: utf-8 -*-
 
 """
-기어 모터 테스트 모듈 (개선버전)
+기어 모터 수동 제어 모듈 (개선버전)
 - L298N 모터 드라이버를 통한 DC 모터 제어
+- WASD 키보드 입력을 통한 실시간 수동 제어
 - 간결한 함수형 접근법으로 재작성
 - 핀 매핑 문제 해결
 """
 
 import RPi.GPIO as GPIO
 import time
+import sys
+import select
+import tty
+import termios
 
 # BCM 모드 GPIO 핀 정의 (pinout.md 기준)
 ENA, ENB = 4, 17  # PWM 활성화 핀
@@ -113,35 +118,104 @@ def motor_stop():
     motor_b_control(0, 0)
 
 
-def comprehensive_test_sequence():
-    """종합 동작 테스트"""
-    print("Comprehensive motor test started.\n")
+def get_key():
+    """
+    비차단 키 입력 받기 (Linux/macOS)
+    터미널에서 단일 키 입력을 즉시 감지
+    """
+    if sys.stdin.isatty():
+        # 터미널 설정 저장
+        old_settings = termios.tcgetattr(sys.stdin)
+        try:
+            # raw 모드로 변경 (즉시 입력 감지)
+            tty.setraw(sys.stdin.fileno())
 
-    print("Forward test (4s)")
-    drive(100, 100)  # 우측100%, 좌측100%
-    time.sleep(1)
-    motor_stop()
-    time.sleep(1)
+            # 입력 대기 (0.1초 타임아웃)
+            if select.select([sys.stdin], [], [], 0.1) == ([sys.stdin], [], []):
+                key = sys.stdin.read(1)
+                return key
+            return None
+        finally:
+            # 터미널 설정 복원
+            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+    return None
 
-    print("Backward test (4s)")
-    drive(-100, -100)  # 양쪽 후진
-    time.sleep(4)
-    motor_stop()
-    time.sleep(1)
 
-    print("Left turn in place (4s)")
-    drive(100, 0)  # 우측 전진, 좌측 후진
-    time.sleep(3)
-    motor_stop()
-    time.sleep(1)
+def manual_control_mode():
+    """
+    수동 제어 모드 - 방향키로 모터 제어
+    WASD 키로 움직임 제어:
+    W: 전진, S: 후진, A: 좌회전, D: 우회전
+    스페이스바: 정지, Q: 종료
+    """
+    print("=" * 50)
+    print("수동 모터 제어 모드 시작")
+    print("=" * 50)
+    print("제어 방법:")
+    print("  W: 전진")
+    print("  S: 후진")
+    print("  A: 좌회전 (제자리)")
+    print("  D: 우회전 (제자리)")
+    print("  Space: 정지")
+    print("  Q: 종료")
+    print("=" * 50)
 
-    print("Right turn in place (4s)")
-    drive(0, 100)  # 우측 후진, 좌측 전진
-    time.sleep(3)
-    motor_stop()
-    time.sleep(1)
+    # 기본 속도 설정
+    base_speed = 80
+    current_right_speed = 0
+    current_left_speed = 0
 
-    print("All tests completed!")
+    try:
+        while True:
+            key = get_key()
+
+            if key:
+                key = key.lower()
+
+                # 방향 제어
+                if key == "w":  # 전진
+                    current_right_speed = base_speed
+                    current_left_speed = base_speed
+                    print(f"전진 (속도: {base_speed}%)")
+
+                elif key == "s":  # 후진
+                    current_right_speed = -base_speed
+                    current_left_speed = -base_speed
+                    print(f"후진 (속도: {base_speed}%)")
+
+                elif key == "a":  # 좌회전 (제자리)
+                    current_right_speed = base_speed
+                    current_left_speed = 0
+                    print(f"좌회전 (속도: {base_speed}%)")
+
+                elif key == "d":  # 우회전 (제자리)
+                    current_right_speed = 0
+                    current_left_speed = base_speed
+                    print(f"우회전 (속도: {base_speed}%)")
+
+                elif key == " ":  # 정지
+                    current_right_speed = 0
+                    current_left_speed = 0
+                    print("정지")
+
+                elif key == "q":  # 종료
+                    print("수동 제어 모드 종료")
+                    break
+
+                else:
+                    continue
+
+                # 모터 제어 실행
+                drive(current_right_speed, current_left_speed)
+
+            # CPU 사용량 조절을 위한 짧은 대기
+            time.sleep(0.05)
+
+    except KeyboardInterrupt:
+        print("\n키보드 인터럽트로 종료")
+    finally:
+        motor_stop()
+        print("모터 정지 완료")
 
 
 def cleanup():
@@ -260,14 +334,14 @@ class GearMotorController:
 
 if __name__ == "__main__":
     try:
-        print("Gear motor test program started.")
+        print("기어 모터 수동 제어 프로그램 시작")
         print("=" * 40)
         setup()
-        comprehensive_test_sequence()
+        manual_control_mode()
 
     except KeyboardInterrupt:
-        print("\nUser interrupted the program.")
+        print("\n사용자가 프로그램을 중단했습니다.")
     except Exception as e:
-        print(f"Error occurred: {e}")
+        print(f"오류 발생: {e}")
     finally:
         cleanup()

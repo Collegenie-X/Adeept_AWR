@@ -4,7 +4,9 @@
 """
 라인 센서 테스트 모듈
 - 3개의 적외선 라인 센서를 사용한 라인 감지
-- 디지털 출력 (HIGH: 라인 감지, LOW: 바닥 감지)
+- 디지털 출력 (실제 하드웨어): HIGH: 검은색 바닥, LOW: 노란색 라인
+- 센서 로직: 어두운 색(검은 바닥) → HIGH(1), 밝은 색(노란 라인) → LOW(0)
+- 반전 로직 센서 사용
 """
 
 import RPi.GPIO as GPIO
@@ -50,16 +52,25 @@ class LineSensorController:
         # 센서 상태를 이진 패턴으로 변환 (LMR)
         pattern = (left << 2) | (middle << 1) | right
 
-        # 패턴별 위치 및 설명 매핑
+        # 패턴별 위치 및 설명 매핑 (실제 하드웨어: HIGH=검은 바닥, LOW=노란 라인)
         position_map = {
-            0b000: (None, "NO LINE"),  # 000: all sensors OFF
-            0b001: (1, "RIGHT EDGE"),  # 001: only right ON
-            0b010: (0, "CENTER"),  # 010: only middle ON
-            0b011: (0.5, "CENTER-RIGHT"),  # 011: middle+right ON
-            0b100: (-1, "LEFT EDGE"),  # 100: only left ON
-            0b101: (None, "CROSS OR LOST"),  # 101: left+right ON (middle OFF)
-            0b110: (-0.5, "CENTER-LEFT"),  # 110: left+middle ON
-            0b111: (0, "WIDE LINE OR CROSS"),  # 111: all sensors ON
+            0b000: (0, "모든 곳 노란 라인 (넓은 라인)"),  # 000: 모든 센서가 노란 라인
+            0b001: (
+                -0.5,
+                "좌측-중앙 노란 라인",
+            ),  # 001: 좌측+중앙이 노란 라인 (우측만 검은색)
+            0b010: (-1, "좌측 노란 라인"),  # 010: 좌측만 노란 라인 (중앙+우측 검은색)
+            0b011: (
+                -1,
+                "좌측 노란 라인",
+            ),  # 011: 좌측만 노란 라인 (중앙+우측 검은색) - 패턴 분석 수정
+            0b100: (
+                0.5,
+                "중앙-우측 노란 라인",
+            ),  # 100: 중앙+우측 노란 라인 (좌측만 검은색)
+            0b101: (0, "중앙 노란 라인"),  # 101: 중앙만 노란 라인 (이상적)
+            0b110: (1, "우측 노란 라인"),  # 110: 우측만 노란 라인 (좌측+중앙 검은색)
+            0b111: (None, "검은 바닥 (라인 없음)"),  # 111: 모든 센서가 검은 바닥
         }
 
         position, description = position_map.get(pattern, (0, "알 수 없음"))
@@ -99,12 +110,13 @@ def test_line_sensors():
     controller = LineSensorController()
 
     try:
-        print("Line sensor test started...")
-        print("Check position decision for each sensor pattern.")
-        print("=" * 70)
-        print("Pattern: L[●/○] M[●/○] R[●/○] | Pos | Desc")
-        print("=" * 70)
-        print("Press Ctrl+C to exit.\n")
+        print("라인 센서 테스트 시작...")
+        print("각 센서 패턴에 따른 위치 판단을 확인합니다.")
+        print("● = 검은 바닥 감지 (HIGH), ○ = 노란 라인 감지 (LOW)")
+        print("=" * 80)
+        print("패턴: L[●/○] M[●/○] R[●/○] | 위치값 | 설명         | 방향   | 이진패턴")
+        print("=" * 80)
+        print("Ctrl+C로 종료하세요.\n")
 
         while True:
             # 센서 값 읽기 (개선된 로직 사용)
@@ -124,9 +136,9 @@ def test_line_sensors():
 
             # 상태 출력 (더 상세한 정보)
             print(
-                f"\rSensors: L[{'●' if left else '○'}] M[{'●' if middle else '○'}] R[{'●' if right else '○'}] "
-                f"| {pos_str} | {line_info['description']:12s} | {simple_str:6s} | "
-                f"Pattern:{line_info['pattern']} ({line_info['binary']})",
+                f"\r센서: L[{'●' if left else '○'}] M[{'●' if middle else '○'}] R[{'●' if right else '○'}] "
+                f"| {pos_str} | {line_info['description']:20s} | {simple_str:6s} | "
+                f"{line_info['pattern']} ({line_info['binary']})",
                 end="",
             )
 
@@ -145,16 +157,16 @@ def test_line_patterns():
     print("라인 센서 패턴 분석 테스트")
     print("=" * 50)
 
-    # 모든 가능한 패턴 시뮬레이션
+    # 모든 가능한 패턴 시뮬레이션 (실제 하드웨어: HIGH=검은바닥, LOW=노란라인)
     patterns = [
-        (0, 0, 0, "라인 없음 - 후진 또는 탐색 필요"),
-        (0, 0, 1, "우측 가장자리 - 좌회전 필요"),
-        (0, 1, 0, "중앙 정확 - 직진"),
-        (0, 1, 1, "중앙-우측 - 약간 좌회전"),
-        (1, 0, 0, "좌측 가장자리 - 우회전 필요"),
-        (1, 0, 1, "좌측+우측 - 교차점 또는 라인 분실"),
-        (1, 1, 0, "중앙-좌측 - 약간 우회전"),
-        (1, 1, 1, "넓은 라인 - 직진 또는 교차점"),
+        (0, 0, 0, "모든 곳 노란 라인 - 넓은 라인이나 교차점"),
+        (0, 0, 1, "좌측-중앙 노란 라인 - 약간 우회전 필요"),
+        (0, 1, 0, "좌측에만 노란 라인 - 우회전하여 라인으로 복귀"),
+        (0, 1, 1, "좌측+우측 노란 라인 - 교차점 또는 Y자 분기점"),
+        (1, 0, 0, "중앙-우측 노란 라인 - 약간 좌회전 필요"),
+        (1, 0, 1, "중앙에만 노란 라인 - 완벽한 직진 상태"),
+        (1, 1, 0, "우측에만 노란 라인 - 좌회전하여 라인으로 복귀"),
+        (1, 1, 1, "검은 바닥만 감지 - 라인 분실, 후진 또는 탐색 필요"),
     ]
 
     for left, middle, right, description in patterns:
