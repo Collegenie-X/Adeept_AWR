@@ -34,8 +34,8 @@ except ImportError:
     SIMULATION = True
 
 # 설정값 (키보드로 실시간 조절 가능)
-FORWARD_SPEED = 70  # 직진 속도
-LOW_TURN_SPEED = 40  # 약한 회전 속도
+FORWARD_SPEED = 100  # 직진 속도
+LOW_TURN_SPEED = 50  # 약한 회전 속도
 HIGH_TURN_SPEED = 80  # 강한 회전 속도
 SAFE_DISTANCE = 15  # 장애물 안전 거리 (cm)
 AVOID_TIME = 0.6  # 회피 동작 시간 (초)
@@ -182,8 +182,43 @@ def get_single_key():
             tty.setcbreak(sys.stdin.fileno())
 
             # 키 입력 대기 (논블로킹)
-            if select.select([sys.stdin], [], [], 0.1) == ([sys.stdin], [], []):
+            if select.select([sys.stdin], [], [], 0.02) == ([sys.stdin], [], []):
                 char = sys.stdin.read(1)
+
+                # 스페이스 키 처리
+                if char == " ":
+                    return "space"
+
+                # 화살표/특수키 이스케이프 시퀀스 처리 (견고한 3바이트 파싱)
+                if char == "\x1b":
+                    # 두 번째 바이트 시도
+                    second = None
+                    if select.select([sys.stdin], [], [], 0.02)[0]:
+                        second = sys.stdin.read(1)
+                    if not second:
+                        return "esc"
+
+                    # 세 번째 바이트 시도
+                    if second in ("[", "O"):
+                        if select.select([sys.stdin], [], [], 0.02)[0]:
+                            third = sys.stdin.read(1)
+                        else:
+                            return "esc"
+
+                        if third == "A":
+                            return "up"
+                        if third == "B":
+                            return "down"
+                        if third == "C":
+                            return "right"
+                        if third == "D":
+                            return "left"
+
+                        return "esc"
+
+                    return "esc"
+
+                # 기본 문자 처리
                 return char.lower()
             else:
                 return None
@@ -234,14 +269,14 @@ def print_control_menu():
     print("  • 회피 시간: 장애물 회피 동작 지속 시간")
 
     print("\n🚦 주행 제어:")
-    print("  s + Enter: 자동 주행 시작 (안전 확인)")
-    print("  p: 즉시 정지 (모든 동작 중단, 수동 모드로 전환)")
+    print("  Enter: 자동 주행 시작")
+    print("  스페이스(또는 p): 즉시 정지 (모든 동작 중단, 수동 모드로 전환)")
     print("  q: 프로그램 종료")
 
     print(f"\n🎮 수동 조작 (정지 상태에서만, {MOTOR_SLEEP_TIME}초 동작 후 자동 정지):")
-    print("  w: 전진 (현재 전진 속도로)")
-    print("  a: 좌회전 (현재 강한 회전 속도로)")
-    print("  d: 우회전 (현재 강한 회전 속도로)")
+    print("  ↑ 또는 w: 전진 (현재 전진 속도로)")
+    print("  ← 또는 a: 좌회전 (현재 강한 회전 속도로)")
+    print("  → 또는 d: 우회전 (현재 강한 회전 속도로)")
 
     print("\n⚙️ 속도 조절 (실시간, Enter 키 불필요):")
     print("  1,2: 전진 속도 -10%/+10%")
@@ -255,12 +290,12 @@ def print_control_menu():
     print("  z: 거리 센서 상태 확인")
 
     print("\n💡 팁:")
-    print("  • 모든 키는 Enter 없이 즉시 반응 (s 제외)")
+    print("  • 대부분의 키는 Enter 없이 즉시 반응, 자동 시작은 Enter 키")
     print("  • 자동 주행 중에도 속도 실시간 조절 가능")
     print(
         f"  • 수동 조작은 {MOTOR_SLEEP_TIME}초 동작 후 자동 정지 (속도/각도 테스트용)"
     )
-    print("  • p 키로 언제든 모든 동작 즉시 중단")
+    print("  • 스페이스(또는 p) 키로 언제든 모든 동작 즉시 중단")
     print("  • q 키 또는 Ctrl+C로 설정값 표시 후 안전 종료")
     print("  • x, z 키로 센서 상태 실시간 확인 가능")
     print("  h: 이 메뉴 다시 보기")
@@ -288,7 +323,7 @@ def handle_keyboard_input():
                 status = "⏸️ 대기"
 
             print(
-                f"\r상태: {status} | h=도움말, s=자동시작, p=정지, q=종료",
+                f"\r상태: {status} | h=도움말, Enter=자동시작, 스페이스=정지, q=종료",
                 end="",
                 flush=True,
             )
@@ -308,23 +343,14 @@ def handle_keyboard_input():
                 show_final_settings()
                 running = False
                 break
-            elif key == "s":
-                print(
-                    f"\n's' 입력됨. 자동 주행을 시작하려면 Enter를 누르세요: ",
-                    end="",
-                    flush=True,
-                )
-                confirm = get_line_input()
-                if confirm == "":  # Enter만 누른 경우
-                    if not autonomous_mode:
-                        print("🚗 자동 주행 시작")
-                        autonomous_mode = True
-                        manual_control_active = False
-                    else:
-                        print("이미 자동 주행 중")
+            elif key == "\n":
+                if not autonomous_mode:
+                    print("\n🚗 자동 주행 시작")
+                    autonomous_mode = True
+                    manual_control_active = False
                 else:
-                    print("취소됨")
-            elif key == "p":
+                    print("\n이미 자동 주행 중")
+            elif key in ["p", "space"]:
                 print("\n🛑 즉시 정지 - 모든 동작 중단")
                 # 모든 모터 즉시 정지
                 emergency_stop()
@@ -336,15 +362,15 @@ def handle_keyboard_input():
                 else:
                     manual_control_active = True
                     print("수동 모드에서 모든 동작 정지")
-            elif key in ["w", "a", "d"] and not autonomous_mode:
+            elif key in ["w", "a", "d", "up", "left", "right"] and not autonomous_mode:
                 manual_control_active = True
-                if key == "w":
+                if key in ["w", "up"]:
                     print("\n🔼 수동 전진")
                     manual_forward()
-                elif key == "a":
+                elif key in ["a", "left"]:
                     print("\n◀️ 수동 좌회전")
                     manual_turn_left()
-                elif key == "d":
+                elif key in ["d", "right"]:
                     print("\n▶️ 수동 우회전")
                     manual_turn_right()
             # 속도 조절 키들 (즉시 반응)
@@ -379,8 +405,8 @@ def handle_keyboard_input():
                 current_avoid_time = min(20, current_avoid_time + 1)
                 print(f"\n✓ 회피 시간: {current_avoid_time/10:.1f}s")
             elif key == "x":
-                print("\n🔍 라인 센서 상태 확인 중...")
-                show_line_sensor_status()
+                print("\n🔍 라인 센서 상태 확인 중 (20초)...")
+                show_line_sensor_status(20)
             elif key == "z":
                 print("\n🔍 거리 센서 상태 확인 중...")
                 show_distance_sensor_status()
@@ -400,15 +426,15 @@ def handle_keyboard_input():
             time.sleep(0.1)
 
 
-def show_line_sensor_status():
-    """라인 센서 상태 실시간 표시"""
+def show_line_sensor_status(duration_seconds: int = 20):
+    """라인 센서 상태 실시간 표시 (기본 20초)"""
     print("=" * 50)
-    print("📍 라인 센서 상태 모니터링 (10초간)")
+    print(f"📍 라인 센서 상태 모니터링 ({duration_seconds}초간)")
     print("=" * 50)
 
     if line_sensor:
         start_time = time.time()
-        while time.time() - start_time < 10:
+        while time.time() - start_time < duration_seconds:
             try:
                 line_info = line_sensor.get_line_position()
                 if isinstance(line_info, dict):
@@ -508,6 +534,32 @@ def stop():
         print("Simulation: Stop")
 
 
+def print_runtime_status(context: str):
+    """수동/자동 동작 시점의 런타임 상태 요약 출력"""
+    try:
+        distance = None
+        if ultrasonic:
+            try:
+                distance = ultrasonic.measure_distance()
+            except:
+                distance = None
+
+        print("-" * 60)
+        print(
+            f"[{context}] 속도 설정: FWD={current_forward_speed}% | TURN_LOW={current_low_turn_speed}% | TURN_HIGH={current_high_turn_speed}%"
+        )
+        print(
+            f"안전거리={current_safe_distance}cm | 회피시간={current_avoid_time/10:.1f}s | 자동모드={autonomous_mode}"
+        )
+        if distance is not None:
+            print(f"현재 거리={distance:.1f}cm (안전기준 {current_safe_distance}cm)")
+        else:
+            print("현재 거리=알수없음")
+        print("-" * 60)
+    except Exception as _:
+        pass
+
+
 def go_forward():
     """직진 (현재 설정값 사용)"""
     if motor:
@@ -584,6 +636,7 @@ def manual_forward():
         motor.set_motor_speed("A", current_forward_speed)
         motor.set_motor_speed("B", current_forward_speed)
         print(f"🔼 전진 {current_forward_speed}% - {MOTOR_SLEEP_TIME}초 후 자동 정지")
+        print_runtime_status("수동 전진")
         time.sleep(MOTOR_SLEEP_TIME)
         motor.motor_stop()
         print("⏹️ 전진 정지")
@@ -601,6 +654,7 @@ def manual_backward():
         motor.set_motor_speed("A", -current_forward_speed)
         motor.set_motor_speed("B", -current_forward_speed)
         print(f"🔽 후진 {current_forward_speed}% - {MOTOR_SLEEP_TIME}초 후 자동 정지")
+        print_runtime_status("수동 후진")
         time.sleep(MOTOR_SLEEP_TIME)
         motor.motor_stop()
         print("⏹️ 후진 정지")
@@ -615,11 +669,13 @@ def manual_backward():
 def manual_turn_left():
     """수동 좌회전 (1초 동작 후 자동 정지)"""
     if motor:
+        # 앞으로 좌회전: 오른쪽 바퀴 강한 전진, 왼쪽 바퀴 약한 후진
         motor.set_motor_speed("A", current_high_turn_speed)
-        motor.set_motor_speed("B", -current_high_turn_speed)
+        motor.set_motor_speed("B", -current_low_turn_speed)
         print(
-            f"◀️ 좌회전 {current_high_turn_speed}% - {MOTOR_SLEEP_TIME}초 후 자동 정지"
+            f"◀️ 좌회전 (오른쪽 강전진 {current_high_turn_speed}%, 왼쪽 약후진 {current_low_turn_speed}%) - {MOTOR_SLEEP_TIME}초 후 자동 정지"
         )
+        print_runtime_status("수동 좌회전")
         time.sleep(MOTOR_SLEEP_TIME)
         motor.motor_stop()
         print("⏹️ 좌회전 정지")
@@ -634,11 +690,13 @@ def manual_turn_left():
 def manual_turn_right():
     """수동 우회전 (1초 동작 후 자동 정지)"""
     if motor:
-        motor.set_motor_speed("A", -current_high_turn_speed)
+        # 앞으로 우회전: 왼쪽 바퀴 강한 전진, 오른쪽 바퀴 약한 후진
+        motor.set_motor_speed("A", -current_low_turn_speed)
         motor.set_motor_speed("B", current_high_turn_speed)
         print(
-            f"▶️ 우회전 {current_high_turn_speed}% - {MOTOR_SLEEP_TIME}초 후 자동 정지"
+            f"▶️ 우회전 (왼쪽 강전진 {current_high_turn_speed}%, 오른쪽 약후진 {current_low_turn_speed}%) - {MOTOR_SLEEP_TIME}초 후 자동 정지"
         )
+        print_runtime_status("수동 우회전")
         time.sleep(MOTOR_SLEEP_TIME)
         motor.motor_stop()
         print("⏹️ 우회전 정지")
@@ -717,11 +775,15 @@ def drive():
         # 왼쪽 노란선 감지 = 우측으로 회피 (검정 도로 중앙으로)
         print("  ↪️ 왼쪽 노란선 감지 - 우측으로 회피")
         turn_right()
+        # 반대 방향 유지로 빠져나오기 지원
+        time.sleep(0.5)
 
     elif road_status == "yellow_right_line":
         # 오른쪽 노란선 감지 = 좌측으로 회피 (검정 도로 중앙으로)
         print("  ↩️ 오른쪽 노란선 감지 - 좌측으로 회피")
         turn_left()
+        # 반대 방향 유지로 빠져나오기 지원
+        time.sleep(0.5)
 
     elif road_status == "yellow_left_corner":
         # 왼쪽 노란선 코너 = 강한 우회전으로 검정 도로 중앙 복귀
@@ -927,10 +989,10 @@ def main():
                 if autonomous_mode:
                     # 자동 주행 모드 (현재 설정값 실시간 반영)
                     drive()
-                    time.sleep(0.1)
+                    time.sleep(0.05)
                 else:
                     # 수동 모드 - 키보드 입력만 처리
-                    time.sleep(0.1)
+                    time.sleep(0.02)
             except KeyboardInterrupt:
                 # 메인 루프에서 Ctrl+C 감지
                 print("\n\n⚠️ Ctrl+C 감지 - 긴급 정지 중...")
