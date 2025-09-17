@@ -62,14 +62,15 @@ class AutonomousDriver:
                 right = int(sensors.get("right", 1))
 
                 # LOW(0) = 노란 라인 감지
-                if middle == 0:
-                    return "center_line"
+                # 우선순위: 양쪽(둘다) → 왼쪽 → 오른쪽 → 가운데 → 없음
                 if left == 0 and right == 0:
                     return "both_lines"
                 if left == 0:
                     return "left_line"
                 if right == 0:
                     return "right_line"
+                if middle == 0:
+                    return "center_line"
                 return "none"
 
             # fallback: 위치 기반
@@ -107,6 +108,7 @@ class AutonomousDriver:
         """좌회전 (오른쪽 경계선에서 벗어나기)"""
         self.motor.set_speeds(self.config.high_turn_speed, -20)
         print(f"Turn left (R:{self.config.high_turn_speed}%, L:-20%)")
+        time.sleep(self.config.DEFAULT_TURN_HOLD_SECONDS)
         self.last_turn_direction = "left"
         self.turn_recovery_count = 0
 
@@ -114,6 +116,7 @@ class AutonomousDriver:
         """우회전 (왼쪽 경계선에서 벗어나기)"""
         self.motor.set_speeds(0, self.config.high_turn_speed + 10)
         print(f"Turn right (R:0%, L:{self.config.high_turn_speed + 10}%)")
+        time.sleep(self.config.DEFAULT_TURN_HOLD_SECONDS)
         self.last_turn_direction = "right"
         self.turn_recovery_count = 0
 
@@ -178,11 +181,13 @@ class AutonomousDriver:
         self._cnt_both = self._cnt_both + 1 if status == "both_lines" else 0
         self._cnt_none = self._cnt_none + 1 if status == "none" else 0
 
+
         # Early return 패턴으로 동작 결정
         if status == "left_line":
             # 직진하면 좌측 차선을 밟으므로 우측으로 이동
             if self._cnt_left >= self.config.DEFAULT_SLIGHT_TURN_THRESHOLD:
                 self.turn_right()
+                time.sleep(0.1)
             else:
                 self.slight_right()
             return
@@ -190,32 +195,20 @@ class AutonomousDriver:
         if status == "right_line":
             if self._cnt_right >= self.config.DEFAULT_SLIGHT_TURN_THRESHOLD:
                 self.turn_left()
+                time.sleep(0.1)
             else:
                 self.slight_left()
             return
 
         if status == "center_line":
-            # 선 이탈 직전, 직전 감지 상태의 반대 방향으로 복귀
-            if self.last_line_status == "left_line":
-                self.turn_right()
-            elif self.last_line_status == "right_line":
-                self.turn_left()
-            else:
-                # 불확실하면 마지막 조향의 반대로 시도
-                if self.last_turn_direction == "left":
-                    self.turn_right()
-                elif self.last_turn_direction == "right":
-                    self.turn_left()
-                else:
-                    self.slight_right()
+            # 요구사항: 가운데는 좌 그룹으로 간주 → 좌로 동작
+            self.turn_left()
+            time.sleep(0.1)
             return
 
         if status == "both_lines":
-            # 차선 사이 중앙. 속도를 낮춰 안정 직진
-            slow_speed = (
-                self.config.forward_speed // self.config.DEFAULT_SLOW_FORWARD_DIVISOR
-            )
-            self.motor.set_speeds(slow_speed, slow_speed)
+            # 요구사항: 모두 인식 시 좌로 동작
+            self.go_forward()
             return
 
         # none: 둘 다 감지되지 않음 → 직진 유지

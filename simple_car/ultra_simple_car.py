@@ -192,6 +192,14 @@ class UltraSimpleCarController:
         elif key == "0":
             time_val = self.config.adjust_avoid_time(1)
             print(f"\n✓ 회피 시간: {time_val:.1f}s")
+        elif key == "<":
+            # 수동 펄스 시간 +0.1s
+            pulse = self.config.adjust_manual_pulse_time(1)
+            print(f"\n✓ 수동 펄스 시간: {pulse:.1f}s")
+        elif key == ">":
+            # 수동 펄스 시간 -0.1s
+            pulse = self.config.adjust_manual_pulse_time(-1)
+            print(f"\n✓ 수동 펄스 시간: {pulse:.1f}s")
         else:
             return True  # 처리하지 않은 키
         return False

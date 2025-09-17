@@ -15,14 +15,15 @@ class ConfigurationService:
 
     def __init__(self):
         # 기본 설정값 (상수)
-        self.DEFAULT_FORWARD_SPEED = 80
-        self.DEFAULT_LOW_TURN_SPEED = 50
-        self.DEFAULT_HIGH_TURN_SPEED = 80
+        self.DEFAULT_FORWARD_SPEED = 60
+        self.DEFAULT_LOW_TURN_SPEED = 30
+        self.DEFAULT_HIGH_TURN_SPEED = 60
         self.DEFAULT_SAFE_DISTANCE = 15
         self.DEFAULT_AVOID_TIME = 0.6
-        self.DEFAULT_MOTOR_SLEEP_TIME = 0.3
+        self.DEFAULT_MOTOR_SLEEP_TIME = 0.1
         self.DEFAULT_AUTO_LOOP_INTERVAL = 0.01
-        self.DEFAULT_SLIGHT_TURN_THRESHOLD = 2
+        self.DEFAULT_SLIGHT_TURN_THRESHOLD = 1
+        self.DEFAULT_TURN_HOLD_SECONDS = 0.2
         self.DEFAULT_SLOW_FORWARD_DIVISOR = 2
 
         # 현재 설정값 (변경 가능)
@@ -31,6 +32,7 @@ class ConfigurationService:
         self.high_turn_speed = self.DEFAULT_HIGH_TURN_SPEED
         self.safe_distance = self.DEFAULT_SAFE_DISTANCE
         self.avoid_time_tenths = int(self.DEFAULT_AVOID_TIME * 10)  # 0.1초 단위
+        self.manual_pulse_tenths = int(self.DEFAULT_MOTOR_SLEEP_TIME * 10)  # 0.1초 단위
 
         # 설정값 범위
         self.SPEED_MIN, self.SPEED_MAX = 10, 100
@@ -72,9 +74,24 @@ class ConfigurationService:
         )
         return self.avoid_time_tenths / 10.0
 
+    def adjust_manual_pulse_time(self, delta: int) -> float:
+        """수동 펄스 시간 조절 (±0.1초 단위)"""
+        self.manual_pulse_tenths = max(
+            self.TIME_MIN, min(self.TIME_MAX, self.manual_pulse_tenths + delta)
+        )
+        return self.manual_pulse_tenths / 10.0
+
     def get_avoid_time_seconds(self) -> float:
         """회피 시간을 초 단위로 반환"""
         return self.avoid_time_tenths / 10.0
+
+    def get_manual_pulse_seconds(self) -> float:
+        """수동 펄스 시간을 초 단위로 반환"""
+        return self.manual_pulse_tenths / 10.0
+
+    def get_turn_hold_seconds(self) -> float:
+        """좌/우 회전 유지 시간을 초 단위로 반환"""
+        return self.DEFAULT_TURN_HOLD_SECONDS
 
     def get_current_settings(self) -> Dict[str, Any]:
         """현재 설정값 딕셔너리 반환"""
@@ -84,9 +101,10 @@ class ConfigurationService:
             "high_turn_speed": self.high_turn_speed,
             "safe_distance": self.safe_distance,
             "avoid_time": self.get_avoid_time_seconds(),
-            "motor_sleep_time": self.DEFAULT_MOTOR_SLEEP_TIME,
+            "motor_sleep_time": self.get_manual_pulse_seconds(),
             "auto_loop_interval": self.DEFAULT_AUTO_LOOP_INTERVAL,
             "slight_turn_threshold": self.DEFAULT_SLIGHT_TURN_THRESHOLD,
+            "turn_hold_seconds": self.DEFAULT_TURN_HOLD_SECONDS,
             "slow_forward_divisor": self.DEFAULT_SLOW_FORWARD_DIVISOR,
         }
 
@@ -113,6 +131,10 @@ class ConfigurationService:
         if self.avoid_time_tenths != int(self.DEFAULT_AVOID_TIME * 10):
             changes.append(
                 f"회피시간: {self.DEFAULT_AVOID_TIME:.1f}s → {self.get_avoid_time_seconds():.1f}s"
+            )
+        if self.manual_pulse_tenths != int(self.DEFAULT_MOTOR_SLEEP_TIME * 10):
+            changes.append(
+                f"수동펄스: {self.DEFAULT_MOTOR_SLEEP_TIME:.1f}s → {self.get_manual_pulse_seconds():.1f}s"
             )
 
         return changes

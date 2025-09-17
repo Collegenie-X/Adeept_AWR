@@ -110,10 +110,13 @@ class ManualController:
             elif action == "stop":
                 self.motor.set_speeds(0, 0)
 
-            # 지속 시간이 있으면 시간 제한 동작
+            # 지속 시간이 있으면 시간 제한 동작 (회전 동작은 회전 유지 시간 추가 고려)
             if duration_seconds is not None:
                 print(self.get_line_sensor_snapshot(f"[{label} {action}-이전]"))
-                time.sleep(duration_seconds)
+                hold_extra = 0.0
+                if action in ("left", "right"):
+                    hold_extra = max(0.0, self.config.get_turn_hold_seconds())
+                time.sleep(duration_seconds + hold_extra)
                 self.motor.set_speeds(0, 0)
                 print(f"⏹️ {label} {action} 정지")
                 print(self.get_line_sensor_snapshot(f"[{label} {action}-이후]"))
@@ -125,52 +128,52 @@ class ManualController:
         """수동 전진 (설정된 시간 동작 후 자동 정지)"""
         if self.motor and getattr(self.motor, "controller", None):
             self.drive_motion(
-                "forward", self.config.DEFAULT_MOTOR_SLEEP_TIME, label="수동"
+                "forward", self.config.get_manual_pulse_seconds(), label="수동"
             )
         else:
             print(
-                f"Simulation: Forward at {self.config.forward_speed}% for {self.config.DEFAULT_MOTOR_SLEEP_TIME} second"
+                f"Simulation: Forward at {self.config.forward_speed}% for {self.config.get_manual_pulse_seconds()} second"
             )
-            time.sleep(self.config.DEFAULT_MOTOR_SLEEP_TIME)
+            time.sleep(self.config.get_manual_pulse_seconds())
             print("Simulation: Forward stopped")
 
     def manual_backward(self) -> None:
         """수동 후진"""
         if self.motor and getattr(self.motor, "controller", None):
             self.drive_motion(
-                "backward", self.config.DEFAULT_MOTOR_SLEEP_TIME, label="수동"
+                "backward", self.config.get_manual_pulse_seconds(), label="수동"
             )
         else:
             print(
-                f"Simulation: Backward at {self.config.forward_speed}% for {self.config.DEFAULT_MOTOR_SLEEP_TIME} second"
+                f"Simulation: Backward at {self.config.forward_speed}% for {self.config.get_manual_pulse_seconds()} second"
             )
-            time.sleep(self.config.DEFAULT_MOTOR_SLEEP_TIME)
+            time.sleep(self.config.get_manual_pulse_seconds())
             print("Simulation: Backward stopped")
 
     def manual_turn_left(self) -> None:
         """수동 좌회전"""
         if self.motor and getattr(self.motor, "controller", None):
             self.drive_motion(
-                "left", self.config.DEFAULT_MOTOR_SLEEP_TIME, label="수동"
+                "left", self.config.get_manual_pulse_seconds(), label="수동"
             )
         else:
             print(
-                f"Simulation: Turn left at {self.config.high_turn_speed}% for {self.config.DEFAULT_MOTOR_SLEEP_TIME} second"
+                f"Simulation: Turn left at {self.config.high_turn_speed}% for {self.config.get_manual_pulse_seconds()} second"
             )
-            time.sleep(self.config.DEFAULT_MOTOR_SLEEP_TIME)
+            time.sleep(self.config.get_manual_pulse_seconds())
             print("Simulation: Turn left stopped")
 
     def manual_turn_right(self) -> None:
         """수동 우회전"""
         if self.motor and getattr(self.motor, "controller", None):
             self.drive_motion(
-                "right", self.config.DEFAULT_MOTOR_SLEEP_TIME, label="수동"
+                "right", self.config.get_manual_pulse_seconds(), label="수동"
             )
         else:
             print(
-                f"Simulation: Turn right at {self.config.high_turn_speed}% for {self.config.DEFAULT_MOTOR_SLEEP_TIME} second"
+                f"Simulation: Turn right at {self.config.high_turn_speed}% for {self.config.get_manual_pulse_seconds()} second"
             )
-            time.sleep(self.config.DEFAULT_MOTOR_SLEEP_TIME)
+            time.sleep(self.config.get_manual_pulse_seconds())
             print("Simulation: Turn right stopped")
 
     def test_steering_sequence(self) -> None:

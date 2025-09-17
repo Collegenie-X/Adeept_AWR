@@ -67,7 +67,7 @@ class MenuService:
         print("  q: 프로그램 종료")
 
         print(
-            f"\n🎮 수동 조작 (정지 상태에서만, {self.config.DEFAULT_MOTOR_SLEEP_TIME}초 동작 후 자동 정지):"
+            f"\n🎮 수동 조작 (정지 상태에서만, {self.config.get_manual_pulse_seconds():.1f}초 동작 후 자동 정지):"
         )
         print("  ↑ 또는 w: 전진 (현재 전진 속도로)")
         print("  ↓ 또는 s: 후진 (현재 전진 속도로)")
@@ -80,6 +80,7 @@ class MenuService:
         print("  5,6: 강한 회전 속도 -10%/+10%")
         print("  7,8: 안전 거리 -5cm/+5cm")
         print("  9,0: 회피 시간 -0.1s/+0.1s")
+        print("  [,]: 수동 펄스 시간 -0.1s/+0.1s")
 
         print("\n🔍 디버깅 기능:")
         print("  x: 라인 센서 상태 실시간 확인")
@@ -90,7 +91,7 @@ class MenuService:
         print("  • 대부분의 키는 Enter 없이 즉시 반응, 자동 시작은 Enter 키")
         print("  • 자동 주행 중에도 속도 실시간 조절 가능")
         print(
-            f"  • 수동 조작은 {self.config.DEFAULT_MOTOR_SLEEP_TIME}초 동작 후 자동 정지 (속도/각도 테스트용)"
+            f"  • 수동 조작은 {self.config.get_manual_pulse_seconds():.1f}초 동작 후 자동 정지 (속도/각도 테스트용)"
         )
         print("  • 스페이스(또는 p) 키로 언제든 모든 동작 즉시 중단")
         print("  • q 키 또는 Ctrl+C로 설정값 표시 후 안전 종료")
