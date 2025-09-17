@@ -10,13 +10,14 @@
 
 import time
 import random
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from .motor_service import MotorControlService
     from .line_sensor_service import LineSensorService
     from .ultrasonic_service import UltrasonicSensorService
     from .config_service import ConfigurationService
+    from .manual_controller import ManualController
 
 
 class AutonomousDriver:
@@ -28,11 +29,13 @@ class AutonomousDriver:
         line_service: "LineSensorService",
         ultrasonic_service: "UltrasonicSensorService",
         config_service: "ConfigurationService",
+        manual_controller: Optional["ManualController"] = None,
     ):
         self.motor = motor_service
         self.line = line_service
         self.ultrasonic = ultrasonic_service
         self.config = config_service
+        self.manual = manual_controller
 
         # 상태 추적 변수
         self.last_turn_direction = "none"  # "left", "right", "none"
@@ -101,39 +104,52 @@ class AutonomousDriver:
 
     def go_forward(self) -> None:
         """직진"""
-        self.motor.set_speeds(self.config.forward_speed, self.config.forward_speed)
+        if self.manual:
+            self.manual.drive_motion("forward")
+        else:
+            self.motor.set_speeds(
+                self.config.forward_speed, self.config.forward_speed
+            )
         print(f"Forward at {self.config.forward_speed}%")
 
     def turn_left(self) -> None:
         """좌회전 (오른쪽 경계선에서 벗어나기)"""
-        self.motor.set_speeds(self.config.high_turn_speed, -20)
-        print(f"Turn left (R:{self.config.high_turn_speed}%, L:-20%)")
+        if self.manual:
+            self.manual.drive_motion("left")
+        else:
+            self.motor.set_speeds(self.config.high_turn_speed, -20)
+        print("Turn left")
         time.sleep(self.config.DEFAULT_TURN_HOLD_SECONDS)
         self.last_turn_direction = "left"
         self.turn_recovery_count = 0
 
     def turn_right(self) -> None:
         """우회전 (왼쪽 경계선에서 벗어나기)"""
-        self.motor.set_speeds(0, self.config.high_turn_speed + 10)
-        print(f"Turn right (R:0%, L:{self.config.high_turn_speed + 10}%)")
+        if self.manual:
+            self.manual.drive_motion("right")
+        else:
+            self.motor.set_speeds(0, self.config.high_turn_speed + 10)
+        print("Turn right")
         time.sleep(self.config.DEFAULT_TURN_HOLD_SECONDS)
         self.last_turn_direction = "right"
         self.turn_recovery_count = 0
 
     def slight_left(self) -> None:
         """약한 좌회전 (중앙선 회피용)"""
-        self.motor.set_speeds(self.config.forward_speed, self.config.low_turn_speed)
-        print(
-            f"Slight left (R:{self.config.forward_speed}%, L:{self.config.low_turn_speed}%)"
-        )
+        if self.manual:
+            self.manual.drive_motion("slight_left")
+        else:
+            self.motor.set_speeds(self.config.forward_speed, self.config.low_turn_speed)
+        print("Slight left")
         self.last_turn_direction = "left"
 
     def slight_right(self) -> None:
         """약한 우회전 (중앙선 회피용)"""
-        self.motor.set_speeds(self.config.low_turn_speed, self.config.forward_speed)
-        print(
-            f"Slight right (R:{self.config.low_turn_speed}%, L:{self.config.forward_speed}%)"
-        )
+        if self.manual:
+            self.manual.drive_motion("slight_right")
+        else:
+            self.motor.set_speeds(self.config.low_turn_speed, self.config.forward_speed)
+        print("Slight right")
         self.last_turn_direction = "right"
 
     def avoid_obstacle(self) -> None:
@@ -168,6 +184,34 @@ class AutonomousDriver:
         #     return
 
         # 2) 차선 유지 로직
+        # 먼저 원시 센서 패턴을 확인하여 좌+중앙/우+중앙 조합을 빠르게 처리
+        raw_checked = False
+        if self.line and getattr(self.line, "controller", None):
+            try:
+                info = self.line.get_position_info()
+                if isinstance(info, dict):
+                    sensors = info.get("sensors", {})
+                    left0 = int(sensors.get("left", 1)) == 0
+                    mid0 = int(sensors.get("middle", 1)) == 0
+                    right0 = int(sensors.get("right", 1)) == 0
+
+                    # 좌+중앙 감지 → 약한 좌회전
+                    if left0 and mid0 and not right0:
+                        print("↙️ 좌+중앙 → 약좌")
+                        self.slight_left()
+                        return
+
+                    # 우+중앙 감지 → 약한 우회전
+                    if right0 and mid0 and not left0:
+                        print("↘️ 우+중앙 → 약우")
+                        self.slight_right()
+                        return
+
+                    raw_checked = True
+            except Exception:
+                pass
+
+        # 원시 패턴에서 처리되지 않았다면 간단 상태 기반으로 진행
         status = self.read_line_status()
 
         if status != self.last_line_status:
@@ -187,28 +231,26 @@ class AutonomousDriver:
             # 직진하면 좌측 차선을 밟으므로 우측으로 이동
             if self._cnt_left >= self.config.DEFAULT_SLIGHT_TURN_THRESHOLD:
                 self.turn_right()
-                time.sleep(0.1)
+                
             else:
                 self.slight_right()
             return
 
         if status == "right_line":
             if self._cnt_right >= self.config.DEFAULT_SLIGHT_TURN_THRESHOLD:
-                self.turn_left()
-                time.sleep(0.1)
+                self.turn_left()  
             else:
                 self.slight_left()
             return
 
         if status == "center_line":
             # 요구사항: 가운데는 좌 그룹으로 간주 → 좌로 동작
-            self.turn_left()
-            time.sleep(0.1)
+            self.go_forward()
             return
 
         if status == "both_lines":
             # 요구사항: 모두 인식 시 좌로 동작
-            self.go_forward()
+            self.turn_left()
             return
 
         # none: 둘 다 감지되지 않음 → 직진 유지

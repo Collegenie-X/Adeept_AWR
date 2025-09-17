@@ -15,15 +15,15 @@ class ConfigurationService:
 
     def __init__(self):
         # 기본 설정값 (상수)
-        self.DEFAULT_FORWARD_SPEED = 60
+        self.DEFAULT_FORWARD_SPEED = 50
         self.DEFAULT_LOW_TURN_SPEED = 30
-        self.DEFAULT_HIGH_TURN_SPEED = 60
+        self.DEFAULT_HIGH_TURN_SPEED = 50
         self.DEFAULT_SAFE_DISTANCE = 15
         self.DEFAULT_AVOID_TIME = 0.6
         self.DEFAULT_MOTOR_SLEEP_TIME = 0.1
         self.DEFAULT_AUTO_LOOP_INTERVAL = 0.01
         self.DEFAULT_SLIGHT_TURN_THRESHOLD = 1
-        self.DEFAULT_TURN_HOLD_SECONDS = 0.2
+        self.DEFAULT_TURN_HOLD_SECONDS = 0.15
         self.DEFAULT_SLOW_FORWARD_DIVISOR = 2
 
         # 현재 설정값 (변경 가능)

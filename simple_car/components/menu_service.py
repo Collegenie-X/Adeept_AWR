@@ -111,7 +111,7 @@ class MenuService:
             status = "⏸️ 대기"
 
         print(
-            f"\r상태: {status} | h=도움말, Enter=자동시작, 스페이스=정지, q=종료",
+            f"\r상태:{status} | Enter=자동 | Space=정지 | q=종료",
             end="",
             flush=True,
         )

@@ -53,11 +53,15 @@ class UltraSimpleCarController:
 
         # 기능별 컨트롤러
         self.menu = MenuService(self.config)
-        self.auto_driver = AutonomousDriver(
-            self.motor_service, self.line_service, self.ultrasonic_service, self.config
-        )
         self.manual_controller = ManualController(
             self.motor_service, self.line_service, self.config
+        )
+        self.auto_driver = AutonomousDriver(
+            self.motor_service,
+            self.line_service,
+            self.ultrasonic_service,
+            self.config,
+            manual_controller=self.manual_controller,
         )
         self.sensor_monitor = SensorMonitor(
             self.line_service, self.ultrasonic_service, self.config
@@ -222,7 +226,7 @@ class UltraSimpleCarController:
     def _handle_manual_movement_keys(self, key: str) -> bool:
         """수동 이동 키 처리 (w/a/s/d, 화살표)"""
         if (
-            key in ["w", "a", "d", "s", "up", "down", "left", "right"]
+            key in ["w", "a", "d", "s","j","k", "up", "down", "left", "right"]
             and not self.autonomous_mode
         ):
             self.manual_control_active = True
@@ -238,6 +242,12 @@ class UltraSimpleCarController:
             elif key in ["d", "right"]:
                 print("\n▶️ 수동 우회전")
                 self.manual_controller.manual_turn_right()
+            elif key in ["k"]:
+                print("\n▶️ 수동 우회전")
+                self.manual_controller.manual_slight_right()
+            elif key in ["j"]:
+                print("\n▶️ 수동 좌회전")
+                self.manual_controller.manual_slight_left()
             return False
         return True
 
