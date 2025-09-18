@@ -96,14 +96,14 @@ class ManualController:
                     -self.config.forward_speed, -self.config.forward_speed
                 )
             elif action == "left":
-                self.motor.set_speeds(self.config.high_turn_speed,-10)                            
+                self.motor.set_speeds(self.config.high_turn_speed, -10)
             elif action == "right":
-                self.motor.set_speeds(0,self.config.high_turn_speed+15) 
-                time.sleep(0.1)               
+                self.motor.set_speeds(0, self.config.high_turn_speed)
+                time.sleep(0.1)
             elif action == "slight_left":
-                self.motor.set_speeds(self.config.high_turn_speed-10,0)                
+                self.motor.set_speeds(self.config.high_turn_speed - 10, 0)
             elif action == "slight_right":
-                self.motor.set_speeds(0, self.config.high_turn_speed-10)
+                self.motor.set_speeds(0, self.config.high_turn_speed - 10)
             elif action == "stop":
                 self.motor.set_speeds(0, 0)
 

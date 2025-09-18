@@ -51,7 +51,7 @@ Adeept_AWR/
     ├── 📁 datasheet/                    # 하드웨어 데이터시트
     ├── 📁 document/                     # 추가 문서
     └── 📁 hardware/                     # 하드웨어 테스트 파일
-        ├── 📄 test_gear_motors.py       # 기어 모터 테스트 (500줄)
+        ├── 📄 test_gear_motors.py       # 기어 모터 테스트 (500줄) - 핀아웃 업데이트됨
         ├── 📄 test_ultrasonic_sensor.py # 초음파 센서 테스트 (600줄)
         ├── 📄 test_line_sensors.py      # 라인 센서 테스트 (400줄)
         └── 📄 test_servo_motors.py      # 서보 모터 테스트 (350줄)

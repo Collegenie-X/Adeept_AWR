@@ -16,9 +16,9 @@ import select
 import tty
 import termios
 
-# BCM 모드 GPIO 핀 정의 (pinout.md 기준)
+# BCM 모드 GPIO 핀 정의 (업데이트된 핀아웃)
 ENA, ENB = 26, 17  # PWM 활성화 핀
-A1, A2 = 26, 21  # 모터A(우측) 방향 제어핀
+A1, A2 = 19, 21  # 모터A(우측) 방향 제어핀 - A1을 GPIO 19로 수정
 B1, B2 = 27, 18  # 모터B(좌측) 방향 제어핀
 
 
@@ -129,10 +129,10 @@ def get_key():
         try:
             # raw 모드로 변경 (즉시 입력 감지)
             tty.setraw(sys.stdin.fileno())
-            
+
             # 키 입력 대기 (차단 방식)
             key = sys.stdin.read(1)
-            
+
             # 특수 키 처리 (ESC 시퀀스)
             if ord(key) == 27:  # ESC
                 return "esc"
@@ -142,7 +142,7 @@ def get_key():
                 return "del"
             else:
                 return key
-                
+
         except KeyboardInterrupt:
             return "q"  # Ctrl+C를 q로 처리
         finally:
@@ -163,7 +163,7 @@ def manual_control_mode():
     print("  1~9: 직접 속도 설정 (10%~90%)")
     print("방향 제어:")
     print("  W: 전진")
-    print("  S: 후진") 
+    print("  S: 후진")
     print("  A: 좌회전")
     print("  D: 우회전")
     print("  Space: 정지")
@@ -176,7 +176,7 @@ def manual_control_mode():
     current_left_speed = 0
 
     print(f"현재 속도: {base_speed}% | 키를 눌러주세요...")
-    
+
     try:
         while True:
             key = get_key()
@@ -357,35 +357,35 @@ def test_individual_motors():
     print("=" * 50)
     print("개별 모터 PWM 테스트")
     print("=" * 50)
-    
+
     try:
         setup()
-        
+
         # 오른쪽 모터 (모터A) 단독 테스트
         print("\n🔧 오른쪽 모터(A) 테스트:")
         test_levels = [20, 40, 60, 80]
-        
+
         for level in test_levels:
             print(f"  오른쪽 모터 {level}% 테스트 (2초)")
             motor_a_control(+1, level)  # 오른쪽 모터만
-            motor_b_control(0, 0)       # 왼쪽 모터 정지
+            motor_b_control(0, 0)  # 왼쪽 모터 정지
             time.sleep(2.0)
             motor_stop()
             time.sleep(1.0)
-            
-        # 왼쪽 모터 (모터B) 단독 테스트  
+
+        # 왼쪽 모터 (모터B) 단독 테스트
         print("\n🔧 왼쪽 모터(B) 테스트:")
-        
+
         for level in test_levels:
             print(f"  왼쪽 모터 {level}% 테스트 (2초)")
-            motor_a_control(0, 0)       # 오른쪽 모터 정지
+            motor_a_control(0, 0)  # 오른쪽 모터 정지
             motor_b_control(+1, level)  # 왼쪽 모터만
             time.sleep(2.0)
             motor_stop()
             time.sleep(1.0)
-            
+
         print("\n✅ 개별 모터 테스트 완료")
-        
+
     except Exception as e:
         print(f"❌ 테스트 중 오류: {e}")
     finally:
@@ -398,14 +398,14 @@ def test_hardware_diagnosis():
     print("=" * 50)
     print("🔍 하드웨어 진단 테스트")
     print("=" * 50)
-    
+
     try:
         setup()
-        
+
         print("1️⃣ ENA 핀(모터A PWM) 테스트:")
         print("   - ENA 핀에 점퍼 캡이 있다면 제거하세요")
         print("   - PWM 신호 확인")
-        
+
         # ENA PWM 직접 테스트
         for duty in [30, 50, 70]:
             print(f"   🔧 ENA PWM {duty}% 설정")
@@ -413,12 +413,12 @@ def test_hardware_diagnosis():
             GPIO.output(A2, GPIO.LOW)
             pwmA.ChangeDutyCycle(duty)  # PWM 직접 제어
             time.sleep(2)
-            
+
         pwmA.ChangeDutyCycle(0)
-        
+
         print("\n2️⃣ ENB 핀(모터B PWM) 테스트:")
         print("   - ENB 핀에 점퍼 캡이 있다면 제거하세요")
-        
+
         # ENB PWM 직접 테스트
         for duty in [30, 50, 70]:
             print(f"   🔧 ENB PWM {duty}% 설정")
@@ -426,19 +426,19 @@ def test_hardware_diagnosis():
             GPIO.output(B2, GPIO.LOW)
             pwmB.ChangeDutyCycle(duty)  # PWM 직접 제어
             time.sleep(2)
-            
+
         pwmB.ChangeDutyCycle(0)
-        
+
         print("\n3️⃣ 핀 연결 확인:")
         print(f"   - ENA(PWM): GPIO {ENA}")
         print(f"   - A1(방향): GPIO {A1}")
         print(f"   - A2(방향): GPIO {A2}")
         print(f"   - ENB(PWM): GPIO {ENB}")
-        print(f"   - B1(방향): GPIO {B1}")  
+        print(f"   - B1(방향): GPIO {B1}")
         print(f"   - B2(방향): GPIO {B2}")
-        
+
         print("\n✅ 하드웨어 진단 완료")
-        
+
     except Exception as e:
         print(f"❌ 진단 중 오류: {e}")
     finally:
@@ -448,7 +448,7 @@ def test_hardware_diagnosis():
 
 if __name__ == "__main__":
     import sys
-    
+
     try:
         print("🚗 모터 테스트 프로그램")
         print("=" * 40)
@@ -457,7 +457,7 @@ if __name__ == "__main__":
         print("  python3 test_gear_motors.py motor  - 개별 모터 테스트")
         print("  python3 test_gear_motors.py check  - 하드웨어 진단")
         print("=" * 40)
-        
+
         if len(sys.argv) > 1:
             if sys.argv[1] == "motor":
                 test_individual_motors()
