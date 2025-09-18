@@ -81,6 +81,7 @@ class MenuService:
         print("  7,8: 안전 거리 -5cm/+5cm")
         print("  9,0: 회피 시간 -0.1s/+0.1s")
         print("  [,]: 수동 펄스 시간 -0.1s/+0.1s")
+        print("  m: 모터 캘리브레이션 (직진 보정)")
 
         print("\n🔍 디버깅 기능:")
         print("  x: 라인 센서 상태 실시간 확인")

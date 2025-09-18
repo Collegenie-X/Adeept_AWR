@@ -105,6 +105,9 @@ class AutonomousDriver:
     def go_forward(self) -> None:
         """직진"""
         if self.manual:
+            # self.motor.set_speeds(
+            #     self.config.forward_speed, self.config.forward_speed
+            # )
             self.manual.drive_motion("forward")
         else:
             self.motor.set_speeds(
@@ -117,7 +120,7 @@ class AutonomousDriver:
         if self.manual:
             self.manual.drive_motion("left")
         else:
-            self.motor.set_speeds(self.config.high_turn_speed, -20)
+            self.motor.set_speeds(self.config.high_turn_speed, -10)
         print("Turn left")
         time.sleep(self.config.DEFAULT_TURN_HOLD_SECONDS)
         self.last_turn_direction = "left"
@@ -233,14 +236,14 @@ class AutonomousDriver:
                 self.turn_right()
                 
             else:
-                self.slight_right()
+                self.turn_right()
             return
 
         if status == "right_line":
             if self._cnt_right >= self.config.DEFAULT_SLIGHT_TURN_THRESHOLD:
                 self.turn_left()  
             else:
-                self.slight_left()
+                self.turn_left()
             return
 
         if status == "center_line":
@@ -255,5 +258,6 @@ class AutonomousDriver:
 
         # none: 둘 다 감지되지 않음 → 직진 유지
         self.go_forward()
+        # time.sleep(self.config.DEFAULT_FORWARD_SPEED)
         self.last_turn_direction = "none"
         self.turn_recovery_count = 0

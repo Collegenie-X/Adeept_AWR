@@ -17,7 +17,7 @@ import tty
 import termios
 
 # BCM 모드 GPIO 핀 정의 (pinout.md 기준)
-ENA, ENB = 4, 17  # PWM 활성화 핀
+ENA, ENB = 26, 17  # PWM 활성화 핀
 A1, A2 = 26, 21  # 모터A(우측) 방향 제어핀
 B1, B2 = 27, 18  # 모터B(좌측) 방향 제어핀
 
@@ -35,9 +35,9 @@ def setup():
     for pin in [ENA, ENB, A1, A2, B1, B2]:
         GPIO.setup(pin, GPIO.OUT)
 
-    # PWM 객체 생성 (1kHz 주파수)
-    pwmA = GPIO.PWM(ENA, 1000)
-    pwmB = GPIO.PWM(ENB, 1000)
+    # PWM 객체 생성 (더 낮은 주파수 사용 - 모터 드라이버 호환성)
+    pwmA = GPIO.PWM(ENA, 1000)  # 100Hz로 변경
+    pwmB = GPIO.PWM(ENB, 1000)  # 100Hz로 변경
 
     # PWM 시작 (초기 듀티비 0%)
     pwmA.start(0)
@@ -120,8 +120,8 @@ def motor_stop():
 
 def get_key():
     """
-    비차단 키 입력 받기 (Linux/macOS)
-    터미널에서 단일 키 입력을 즉시 감지
+    개선된 키 입력 받기 (차단 방식)
+    터미널에서 키 입력을 확실하게 감지
     """
     if sys.stdin.isatty():
         # 터미널 설정 저장
@@ -129,12 +129,22 @@ def get_key():
         try:
             # raw 모드로 변경 (즉시 입력 감지)
             tty.setraw(sys.stdin.fileno())
-
-            # 입력 대기 (0.1초 타임아웃)
-            if select.select([sys.stdin], [], [], 0.1) == ([sys.stdin], [], []):
-                key = sys.stdin.read(1)
+            
+            # 키 입력 대기 (차단 방식)
+            key = sys.stdin.read(1)
+            
+            # 특수 키 처리 (ESC 시퀀스)
+            if ord(key) == 27:  # ESC
+                return "esc"
+            elif ord(key) == 32:  # Space
+                return " "
+            elif ord(key) == 127:  # Backspace/Delete
+                return "del"
+            else:
                 return key
-            return None
+                
+        except KeyboardInterrupt:
+            return "q"  # Ctrl+C를 q로 처리
         finally:
             # 터미널 설정 복원
             termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
@@ -143,28 +153,30 @@ def get_key():
 
 def manual_control_mode():
     """
-    수동 제어 모드 - 방향키로 모터 제어
-    WASD 키로 움직임 제어:
-    W: 전진, S: 후진, A: 좌회전, D: 우회전
-    스페이스바: 정지, Q: 종료
+    단순 모터 제어 모드
+    숫자 키로 직접 속도 설정 (1~9), 방향키로 제어
     """
     print("=" * 50)
-    print("수동 모터 제어 모드 시작")
+    print("단순 모터 제어 모드")
     print("=" * 50)
-    print("제어 방법:")
+    print("속도 설정:")
+    print("  1~9: 직접 속도 설정 (10%~90%)")
+    print("방향 제어:")
     print("  W: 전진")
-    print("  S: 후진")
-    print("  A: 좌회전 (제자리)")
-    print("  D: 우회전 (제자리)")
+    print("  S: 후진") 
+    print("  A: 좌회전")
+    print("  D: 우회전")
     print("  Space: 정지")
     print("  Q: 종료")
     print("=" * 50)
 
     # 기본 속도 설정
-    base_speed = 80
+    base_speed = 30
     current_right_speed = 0
     current_left_speed = 0
 
+    print(f"현재 속도: {base_speed}% | 키를 눌러주세요...")
+    
     try:
         while True:
             key = get_key()
@@ -172,44 +184,52 @@ def manual_control_mode():
             if key:
                 key = key.lower()
 
+                # 숫자 키로 속도 직접 설정
+                if key in "123456789":
+                    base_speed = int(key) * 10
+                    print(f"🎯 속도 설정: {base_speed}%")
+
                 # 방향 제어
-                if key == "w":  # 전진
+                elif key == "w":  # 전진
                     current_right_speed = base_speed
                     current_left_speed = base_speed
-                    print(f"전진 (속도: {base_speed}%)")
+                    print(f"⬆️  전진 {base_speed}%")
+                    drive(current_right_speed, current_left_speed)
 
                 elif key == "s":  # 후진
                     current_right_speed = -base_speed
                     current_left_speed = -base_speed
-                    print(f"후진 (속도: {base_speed}%)")
+                    print(f"⬇️  후진 {base_speed}%")
+                    drive(current_right_speed, current_left_speed)
 
-                elif key == "a":  # 좌회전 (제자리)
+                elif key == "a":  # 좌회전
                     current_right_speed = base_speed
                     current_left_speed = 0
-                    print(f"좌회전 (속도: {base_speed}%)")
+                    print(f"⬅️  좌회전 {base_speed}%")
+                    drive(current_right_speed, current_left_speed)
 
-                elif key == "d":  # 우회전 (제자리)
+                elif key == "d":  # 우회전
                     current_right_speed = 0
                     current_left_speed = base_speed
-                    print(f"우회전 (속도: {base_speed}%)")
+                    print(f"➡️  우회전 {base_speed}%")
+                    drive(current_right_speed, current_left_speed)
 
                 elif key == " ":  # 정지
                     current_right_speed = 0
                     current_left_speed = 0
-                    print("정지")
+                    print("⏹️  정지")
+                    drive(current_right_speed, current_left_speed)
 
                 elif key == "q":  # 종료
-                    print("수동 제어 모드 종료")
+                    print("👋 종료")
                     break
 
                 else:
-                    continue
+                    print(f"알 수 없는 키: {key}")
 
-                # 모터 제어 실행
-                drive(current_right_speed, current_left_speed)
-
-            # CPU 사용량 조절을 위한 짧은 대기
-            time.sleep(0.05)
+            else:
+                # 키 입력이 없으면 잠시 대기
+                time.sleep(0.1)
 
     except KeyboardInterrupt:
         print("\n키보드 인터럽트로 종료")
@@ -250,9 +270,9 @@ class GearMotorController:
         for pin in [ENA, ENB, A1, A2, B1, B2]:
             GPIO.setup(pin, GPIO.OUT)
 
-        # PWM 객체 생성 및 시작
-        self.pwmA = GPIO.PWM(ENA, 1000)
-        self.pwmB = GPIO.PWM(ENB, 1000)
+        # PWM 객체 생성 및 시작 (낮은 주파수)
+        self.pwmA = GPIO.PWM(ENA, 100)  # 100Hz로 변경
+        self.pwmB = GPIO.PWM(ENB, 100)  # 100Hz로 변경
         self.pwmA.start(0)
         self.pwmB.start(0)
 
@@ -332,16 +352,126 @@ class GearMotorController:
         print("GearMotorController cleanup completed.")
 
 
-if __name__ == "__main__":
+def test_individual_motors():
+    """개별 모터 테스트 - 좌우 모터를 따로 테스트"""
+    print("=" * 50)
+    print("개별 모터 PWM 테스트")
+    print("=" * 50)
+    
     try:
-        print("기어 모터 수동 제어 프로그램 시작")
-        print("=" * 40)
         setup()
-        manual_control_mode()
+        
+        # 오른쪽 모터 (모터A) 단독 테스트
+        print("\n🔧 오른쪽 모터(A) 테스트:")
+        test_levels = [20, 40, 60, 80]
+        
+        for level in test_levels:
+            print(f"  오른쪽 모터 {level}% 테스트 (2초)")
+            motor_a_control(+1, level)  # 오른쪽 모터만
+            motor_b_control(0, 0)       # 왼쪽 모터 정지
+            time.sleep(2.0)
+            motor_stop()
+            time.sleep(1.0)
+            
+        # 왼쪽 모터 (모터B) 단독 테스트  
+        print("\n🔧 왼쪽 모터(B) 테스트:")
+        
+        for level in test_levels:
+            print(f"  왼쪽 모터 {level}% 테스트 (2초)")
+            motor_a_control(0, 0)       # 오른쪽 모터 정지
+            motor_b_control(+1, level)  # 왼쪽 모터만
+            time.sleep(2.0)
+            motor_stop()
+            time.sleep(1.0)
+            
+        print("\n✅ 개별 모터 테스트 완료")
+        
+    except Exception as e:
+        print(f"❌ 테스트 중 오류: {e}")
+    finally:
+        motor_stop()
+        cleanup()
+
+
+def test_hardware_diagnosis():
+    """하드웨어 진단 테스트"""
+    print("=" * 50)
+    print("🔍 하드웨어 진단 테스트")
+    print("=" * 50)
+    
+    try:
+        setup()
+        
+        print("1️⃣ ENA 핀(모터A PWM) 테스트:")
+        print("   - ENA 핀에 점퍼 캡이 있다면 제거하세요")
+        print("   - PWM 신호 확인")
+        
+        # ENA PWM 직접 테스트
+        for duty in [30, 50, 70]:
+            print(f"   🔧 ENA PWM {duty}% 설정")
+            GPIO.output(A1, GPIO.HIGH)  # 방향 설정
+            GPIO.output(A2, GPIO.LOW)
+            pwmA.ChangeDutyCycle(duty)  # PWM 직접 제어
+            time.sleep(2)
+            
+        pwmA.ChangeDutyCycle(0)
+        
+        print("\n2️⃣ ENB 핀(모터B PWM) 테스트:")
+        print("   - ENB 핀에 점퍼 캡이 있다면 제거하세요")
+        
+        # ENB PWM 직접 테스트
+        for duty in [30, 50, 70]:
+            print(f"   🔧 ENB PWM {duty}% 설정")
+            GPIO.output(B1, GPIO.HIGH)  # 방향 설정
+            GPIO.output(B2, GPIO.LOW)
+            pwmB.ChangeDutyCycle(duty)  # PWM 직접 제어
+            time.sleep(2)
+            
+        pwmB.ChangeDutyCycle(0)
+        
+        print("\n3️⃣ 핀 연결 확인:")
+        print(f"   - ENA(PWM): GPIO {ENA}")
+        print(f"   - A1(방향): GPIO {A1}")
+        print(f"   - A2(방향): GPIO {A2}")
+        print(f"   - ENB(PWM): GPIO {ENB}")
+        print(f"   - B1(방향): GPIO {B1}")  
+        print(f"   - B2(방향): GPIO {B2}")
+        
+        print("\n✅ 하드웨어 진단 완료")
+        
+    except Exception as e:
+        print(f"❌ 진단 중 오류: {e}")
+    finally:
+        motor_stop()
+        cleanup()
+
+
+if __name__ == "__main__":
+    import sys
+    
+    try:
+        print("🚗 모터 테스트 프로그램")
+        print("=" * 40)
+        print("사용법:")
+        print("  python3 test_gear_motors.py        - 수동 제어")
+        print("  python3 test_gear_motors.py motor  - 개별 모터 테스트")
+        print("  python3 test_gear_motors.py check  - 하드웨어 진단")
+        print("=" * 40)
+        
+        if len(sys.argv) > 1:
+            if sys.argv[1] == "motor":
+                test_individual_motors()
+            elif sys.argv[1] == "check":
+                test_hardware_diagnosis()
+            else:
+                print("알 수 없는 옵션입니다.")
+        else:
+            setup()
+            manual_control_mode()
 
     except KeyboardInterrupt:
-        print("\n사용자가 프로그램을 중단했습니다.")
+        print("\n👋 프로그램 종료")
     except Exception as e:
-        print(f"오류 발생: {e}")
+        print(f"❌ 오류: {e}")
     finally:
         cleanup()
