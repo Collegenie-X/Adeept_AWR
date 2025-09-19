@@ -19,7 +19,7 @@ class ConfigurationService:
         self.DEFAULT_LOW_TURN_SPEED = 20
         self.DEFAULT_HIGH_TURN_SPEED = 50
         self.DEFAULT_SAFE_DISTANCE = 25
-        self.DEFAULT_AVOID_TIME = 1
+        self.DEFAULT_AVOID_TIME = 1.4
         self.DEFAULT_MOTOR_SLEEP_TIME = 0.05
         self.DEFAULT_AUTO_LOOP_INTERVAL = 0.1
         self.DEFAULT_SLIGHT_TURN_THRESHOLD = 1
@@ -28,7 +28,7 @@ class ConfigurationService:
 
         # 장애물 회피 관련 설정값
         self.DEFAULT_OBSTACLE_AVOID_SPEED = 60  # 장애물 회피 회전 속도
-        self.DEFAULT_OBSTACLE_AVOID_TIME = 1.5  # 장애물 회피 회전 시간
+        self.DEFAULT_OBSTACLE_AVOID_TIME = 1.0  # 장애물 회피 회전 시간
         self.DEFAULT_OBSTACLE_FORWARD_TIME = 1.0  # 장애물 회피 후 전진 시간
         self.DEFAULT_EARLY_DETECTION_DISTANCE = 40  # 조기 감지 거리 (더 먼 거리)
         self.DEFAULT_WARNING_DISTANCE = 35  # 경고 거리 (속도 감소)
@@ -56,6 +56,10 @@ class ConfigurationService:
         # 초음파 센서 on/off 설정
         self.ultrasonic_enabled = True  # 기본값: 활성화
 
+        # 초음파 센서 측정 모드 설정 (신기능)
+        self.ultrasonic_mode = "single"  # "single", "fast", "stable"
+        self.DEFAULT_ULTRASONIC_MODE = "single"
+
         # 적응형 라인 팔로잉 설정
         self.DEFAULT_MICRO_TURN_TIME = 0.08  # 미세 조정 (중앙 근처)
         self.DEFAULT_SLIGHT_TURN_TIME = 0.12  # 약한 회전 (약간 벗어남)
@@ -73,6 +77,7 @@ class ConfigurationService:
         self.DISTANCE_MIN, self.DISTANCE_MAX = 5, 50
         self.TIME_MIN, self.TIME_MAX = 1, 20  # 0.1초 단위
         self.TURN_HOLD_MIN, self.TURN_HOLD_MAX = 0.1, 0.5  # 회전 시간 범위
+        self.AVOID_TIME_MIN, self.AVOID_TIME_MAX = 1.0, 2.6  # 회피 시간 범위 (신기능)
 
     def adjust_forward_speed(self, delta: int) -> int:
         """전진 속도 조절 (±10% 단위)"""
@@ -103,11 +108,34 @@ class ConfigurationService:
         return self.safe_distance
 
     def adjust_avoid_time(self, delta: int) -> float:
-        """회피 시간 조절 (±0.1초 단위)"""
+        """회피 시간 조절 (±0.1초 단위) - 기존 함수"""
         self.avoid_time_tenths = max(
             self.TIME_MIN, min(self.TIME_MAX, self.avoid_time_tenths + delta)
         )
         return self.avoid_time_tenths / 10.0
+
+    def adjust_default_avoid_time(self, delta_direction: int) -> float:
+        """DEFAULT_AVOID_TIME 조절 (±0.2초 단위, 신기능)
+
+        Args:
+            delta_direction: +1 = +0.2초, -1 = -0.2초
+
+        Returns:
+            조절된 회피 시간 (초)
+        """
+        # 0.2초 단위로 조절
+        delta_seconds = delta_direction * 0.2
+        new_time = self.DEFAULT_AVOID_TIME + delta_seconds
+
+        # 범위 제한 (1.0 ~ 2.6초)
+        self.DEFAULT_AVOID_TIME = max(
+            self.AVOID_TIME_MIN, min(self.AVOID_TIME_MAX, new_time)
+        )
+
+        # 현재 설정값도 함께 업데이트
+        self.avoid_time_tenths = int(self.DEFAULT_AVOID_TIME * 10)
+
+        return self.DEFAULT_AVOID_TIME
 
     def adjust_manual_pulse_time(self, delta: int) -> float:
         """수동 펄스 시간 조절 (±0.1초 단위)"""
@@ -163,6 +191,43 @@ class ConfigurationService:
             True: 활성화, False: 비활성화
         """
         return self.ultrasonic_enabled
+
+    def cycle_ultrasonic_mode(self) -> str:
+        """초음파 센서 측정 모드 순환 변경 (신기능)
+
+        Returns:
+            변경된 모드명
+        """
+        modes = ["single", "fast", "stable"]
+        current_index = (
+            modes.index(self.ultrasonic_mode) if self.ultrasonic_mode in modes else 0
+        )
+        next_index = (current_index + 1) % len(modes)
+        self.ultrasonic_mode = modes[next_index]
+        return self.ultrasonic_mode
+
+    def get_ultrasonic_mode_description(self) -> str:
+        """현재 초음파 센서 모드 설명 반환"""
+        descriptions = {
+            "single": "단일 측정 (빠름, 기본)",
+            "fast": "3회 측정 중간값 (빠름+정확)",
+            "stable": "5회 측정 평균값 (느림+안정)",
+        }
+        return descriptions.get(self.ultrasonic_mode, "알 수 없음")
+
+    def set_ultrasonic_mode(self, mode: str) -> bool:
+        """초음파 센서 모드 직접 설정
+
+        Args:
+            mode: "single", "fast", "stable" 중 하나
+
+        Returns:
+            설정 성공 여부
+        """
+        if mode in ["single", "fast", "stable"]:
+            self.ultrasonic_mode = mode
+            return True
+        return False
 
     def get_adaptive_turn_time(self, line_position: str) -> float:
         """라인 위치에 따른 적응형 회전 시간 반환
@@ -239,6 +304,8 @@ class ConfigurationService:
             changes.append(
                 f"회전시간: {self.DEFAULT_TURN_HOLD_SECONDS:.2f}s → {self.turn_hold_seconds:.2f}s"
             )
+        if abs(self.DEFAULT_AVOID_TIME - 1.4) > 0.001:  # 초기 기본값 1.4와 비교
+            changes.append(f"기본회피시간: 1.4s → {self.DEFAULT_AVOID_TIME:.1f}s")
 
         return changes
 
@@ -248,6 +315,7 @@ class ConfigurationService:
         self.low_turn_speed = self.DEFAULT_LOW_TURN_SPEED
         self.high_turn_speed = self.DEFAULT_HIGH_TURN_SPEED
         self.safe_distance = self.DEFAULT_SAFE_DISTANCE
+        self.DEFAULT_AVOID_TIME = 1.4  # 기본값으로 복원
         self.avoid_time_tenths = int(self.DEFAULT_AVOID_TIME * 10)
         self.manual_pulse_tenths = int(self.DEFAULT_MOTOR_SLEEP_TIME * 10)
         self.obstacle_avoid_speed = self.DEFAULT_OBSTACLE_AVOID_SPEED
@@ -258,6 +326,7 @@ class ConfigurationService:
         self.critical_distance = self.DEFAULT_CRITICAL_DISTANCE
         self.turn_hold_seconds = self.DEFAULT_TURN_HOLD_SECONDS
         self.ultrasonic_enabled = True  # 기본값: 활성화
+        self.ultrasonic_mode = self.DEFAULT_ULTRASONIC_MODE  # 기본값: single
         self.micro_turn_time = self.DEFAULT_MICRO_TURN_TIME
         self.slight_turn_time = self.DEFAULT_SLIGHT_TURN_TIME
         self.normal_turn_time = self.DEFAULT_NORMAL_TURN_TIME

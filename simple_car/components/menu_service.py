@@ -63,6 +63,10 @@ class MenuService:
             f"(범위: {self.config.TIME_MIN/10:.1f}-{self.config.TIME_MAX/10:.1f}s, "
             f"기본값: {self.config.DEFAULT_AVOID_TIME:.1f}s)"
         )
+        print(
+            f"  🔄 기본 회피 시간: {self.config.DEFAULT_AVOID_TIME:.1f}s "
+            f"(범위: {self.config.AVOID_TIME_MIN:.1f}-{self.config.AVOID_TIME_MAX:.1f}s) ⭐ 새기능"
+        )
 
         print("\n🎯 속도 설정 용도:")
         print("  • 전진 속도: 직선 주행 시 사용")
@@ -90,7 +94,7 @@ class MenuService:
         print("  5,6: 강한 회전 속도 -10%/+10%")
         print("  7,8: 안전 거리 -5cm/+5cm")
         print("  9,0: 회피 시간 -0.1s/+0.1s")
-        print("  [,]: 수동 펄스 시간 -0.1s/+0.1s")
+        print("  <,>: 기본 회피 시간 -0.2s/+0.2s (1.0~2.6s) ⭐ 새기능")
         print("  m: 모터 캘리브레이션 (직진 보정)")
 
         print("\n🔍 디버깅 기능:")
@@ -155,6 +159,10 @@ class MenuService:
         print(
             f"⏱️ 회피 시간:     {settings['avoid_time']:4.1f}s "
             f"(기본값: {self.config.DEFAULT_AVOID_TIME:.1f}s)"
+        )
+        print(
+            f"🔄 기본 회피 시간: {self.config.DEFAULT_AVOID_TIME:.1f}s "
+            f"(범위: {self.config.AVOID_TIME_MIN:.1f}-{self.config.AVOID_TIME_MAX:.1f}s)"
         )
         print(f"🕐 수동 동작시간: {settings['motor_sleep_time']:4.1f}s")
 

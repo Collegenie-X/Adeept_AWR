@@ -101,7 +101,7 @@ class ManualController:
             elif action == "left":
                 self.motor.set_speeds(self.config.high_turn_speed, -10)
             elif action == "right":
-                self.motor.set_speeds(0, self.config.high_turn_speed+5)
+                self.motor.set_speeds(0, self.config.high_turn_speed + 5)
             elif action == "slight_left":
                 self.motor.set_speeds(self.config.high_turn_speed - 10, 0)
             elif action == "slight_right":
@@ -978,6 +978,46 @@ class ManualController:
                 return self.config.safe_distance + 10
         except Exception as e:
             print(f"초음파 센서 읽기 오류: {e}")
+            return 999.0
+
+    def check_obstacle_distance_fast(self) -> float:
+        """빠른 다중 샘플링으로 장애물 거리 측정 (신기능)
+
+        Returns:
+            측정된 거리 (cm), 측정 실패시 999.0 반환
+        """
+        try:
+            if self.ultrasonic and getattr(self.ultrasonic, "sensor", None):
+                distance = self.ultrasonic.read_distance_fast(samples=3)
+                if distance is not None:
+                    return distance
+                else:
+                    return 999.0  # 측정 실패
+            else:
+                # 시뮬레이션 모드에서는 안전 거리보다 큰 값 반환
+                return self.config.safe_distance + 10
+        except Exception as e:
+            print(f"초음파 센서 빠른 읽기 오류: {e}")
+            return 999.0
+
+    def check_obstacle_distance_stable(self) -> float:
+        """안정적인 다중 샘플링으로 장애물 거리 측정 (신기능)
+
+        Returns:
+            측정된 거리 (cm), 측정 실패시 999.0 반환
+        """
+        try:
+            if self.ultrasonic and getattr(self.ultrasonic, "sensor", None):
+                distance = self.ultrasonic.read_distance_averaged(samples=5)
+                if distance is not None:
+                    return distance
+                else:
+                    return 999.0  # 측정 실패
+            else:
+                # 시뮬레이션 모드에서는 안전 거리보다 큰 값 반환
+                return self.config.safe_distance + 10
+        except Exception as e:
+            print(f"초음파 센서 안정적 읽기 오류: {e}")
             return 999.0
 
     def get_obstacle_status(self) -> tuple[str, float]:

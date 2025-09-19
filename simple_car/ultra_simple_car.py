@@ -197,13 +197,13 @@ class UltraSimpleCarController:
             time_val = self.config.adjust_avoid_time(1)
             print(f"\n✓ 회피 시간: {time_val:.1f}s")
         elif key == "<":
-            # 수동 펄스 시간 +0.1s
-            pulse = self.config.adjust_manual_pulse_time(1)
-            print(f"\n✓ 수동 펄스 시간: {pulse:.1f}s")
+            # DEFAULT_AVOID_TIME -0.2초 (신기능)
+            avoid_time = self.config.adjust_default_avoid_time(-1)
+            print(f"\n✓ 기본 회피 시간: {avoid_time:.1f}초 (-0.2초)")
         elif key == ">":
-            # 수동 펄스 시간 -0.1s
-            pulse = self.config.adjust_manual_pulse_time(-1)
-            print(f"\n✓ 수동 펄스 시간: {pulse:.1f}s")
+            # DEFAULT_AVOID_TIME +0.2초 (신기능)
+            avoid_time = self.config.adjust_default_avoid_time(1)
+            print(f"\n✓ 기본 회피 시간: {avoid_time:.1f}초 (+0.2초)")
         else:
             return True  # 처리하지 않은 키
         return False
@@ -225,6 +225,11 @@ class UltraSimpleCarController:
             status_text = "활성화" if status else "비활성화"
             status_icon = "🔊" if status else "🔇"
             print(f"\n{status_icon} 초음파 센서: {status_text}")
+        elif key == "y":
+            # 초음파 센서 측정 모드 전환 (신기능)
+            mode = self.config.cycle_ultrasonic_mode()
+            description = self.config.get_ultrasonic_mode_description()
+            print(f"\n🔧 초음파 센서 모드: {mode} ({description})")
         elif key == "h":
             # 종합 도움말 표시
             self.show_comprehensive_help()
@@ -315,7 +320,7 @@ class UltraSimpleCarController:
         print("  5,6    : 강한 회전 속도 -10%/+10%")
         print("  7,8    : 안전 거리 -5cm/+5cm")
         print("  9,0    : 회피 시간 -0.1초/+0.1초")
-        print("  [,]    : 수동 펄스 시간 -0.1초/+0.1초")
+        print("  <,>    : 기본 회피 시간 -0.2초/+0.2초 (1.0~2.6초) ⭐ 새기능")
 
         print("\n🤖 자율주행 모드:")
         print("  Enter  : 자율주행 시작/정지")
@@ -327,6 +332,9 @@ class UltraSimpleCarController:
             "🔊 활성화" if self.config.ultrasonic_enabled else "🔇 비활성화"
         )
         print(f"           (현재 상태: {current_ultrasonic})")
+        print("  y      : 초음파 센서 측정 모드 전환 ⭐ 새기능")
+        current_mode = self.config.get_ultrasonic_mode_description()
+        print(f"           (현재 모드: {current_mode})")
         print("  m      : 모터 캘리브레이션 (직진 보정)")
         print("  r      : 모든 설정 기본값으로 초기화")
 
@@ -356,13 +364,25 @@ class UltraSimpleCarController:
         print("     - u키로 장애물 감지 기능 on/off")
         print("     - 성능 최적화 및 트랙별 맞춤 설정")
 
+        print("  📡 초음파 센서 측정 모드 (y키):")
+        print("     - single: 단일 측정 (최고 속도, 기본)")
+        print("     - fast: 3회 측정 중간값 (빠름+정확)")
+        print("     - stable: 5회 측정 평균값 (느림+안정)")
+        print(f"     - 현재: {self.config.ultrasonic_mode} 모드")
+
         print("\n📊 현재 설정 요약:")
         settings = self.config.get_current_settings()
         print(f"  전진 속도: {settings['forward_speed']}%")
         print(f"  회전 지연: {settings['turn_hold_seconds']:.2f}초")
         print(f"  안전 거리: {settings['safe_distance']}cm")
+        print(
+            f"  기본 회피 시간: {self.config.DEFAULT_AVOID_TIME:.1f}초 (범위: {self.config.AVOID_TIME_MIN:.1f}~{self.config.AVOID_TIME_MAX:.1f}초)"
+        )
         ultrasonic_text = "활성화" if settings["ultrasonic_enabled"] else "비활성화"
         print(f"  초음파 센서: {ultrasonic_text}")
+        print(
+            f"  센서 측정 모드: {self.config.ultrasonic_mode} ({self.config.get_ultrasonic_mode_description()})"
+        )
 
         # 변경된 설정이 있으면 표시
         changes = self.config.get_changed_settings()
@@ -376,6 +396,7 @@ class UltraSimpleCarController:
         print("\n💡 주요 팁:")
         print("  • 자율주행 중에도 대부분의 설정을 실시간 조절 가능")
         print("  • 트랙이 단순하면 u키로 초음파 센서 off → 빠른 주행")
+        print("  • y키로 센서 모드 조절: single(최고속도) → fast(균형) → stable(정확)")
         print("  • 회전이 부족/과다하면 3,4키로 회전 시간 미세 조정")
         print("  • 111 패턴에서 선 이탈시 자동으로 안정적 처리 수행")
 
@@ -383,6 +404,8 @@ class UltraSimpleCarController:
         print("  • 직진 안됨 → m키로 모터 캘리브레이션")
         print("  • 회전 부족/과다 → 3,4키로 회전 시간 조절")
         print("  • 장애물 오감지 → u키로 초음파 센서 off")
+        print("  • 센서 측정 불안정 → y키로 stable 모드 전환")
+        print("  • 반응 속도 느림 → y키로 single 모드 전환")
         print("  • 설정 꼬임 → r키로 전체 초기화")
 
         print("\n" + "=" * 80)

@@ -91,7 +91,7 @@ class AutonomousDriver:
             return "none"
 
     def read_distance(self) -> float:
-        """초음파 센서로 거리 읽기"""
+        """초음파 센서로 거리 읽기 (기본 함수)"""
         if not self.ultrasonic or not getattr(self.ultrasonic, "sensor", None):
             # 시뮬레이션 모드
             if random.random() < 0.1:  # 10% 장애물 확률
@@ -100,6 +100,32 @@ class AutonomousDriver:
                 return random.randint(self.config.safe_distance + 10, 100)
 
         distance = self.ultrasonic.read_distance_cm()
+        return distance if distance else 999
+
+    def read_distance_fast(self) -> float:
+        """빠른 다중 샘플링으로 정확한 거리 읽기 (신기능)"""
+        if not self.ultrasonic or not getattr(self.ultrasonic, "sensor", None):
+            # 시뮬레이션 모드
+            if random.random() < 0.1:  # 10% 장애물 확률
+                return random.randint(5, self.config.safe_distance - 1)
+            else:
+                return random.randint(self.config.safe_distance + 10, 100)
+
+        # 빠른 3회 측정으로 중간값 반환
+        distance = self.ultrasonic.read_distance_fast(samples=3)
+        return distance if distance else 999
+
+    def read_distance_stable(self) -> float:
+        """안정적인 거리 측정 (평균값 기반)"""
+        if not self.ultrasonic or not getattr(self.ultrasonic, "sensor", None):
+            # 시뮬레이션 모드
+            if random.random() < 0.1:  # 10% 장애물 확률
+                return random.randint(5, self.config.safe_distance - 1)
+            else:
+                return random.randint(self.config.safe_distance + 10, 100)
+
+        # 5회 측정으로 평균값 반환
+        distance = self.ultrasonic.read_distance_averaged(samples=5)
         return distance if distance else 999
 
     def go_forward(self) -> None:
@@ -141,28 +167,22 @@ class AutonomousDriver:
 
         # 1단계: 확실한 정지 (0.1초)
         print("1️⃣ 완전 정지 (0.1초)")
-  
+
         self.motor.set_speeds(0, 0)
         time.sleep(0.1)
 
-
         # 2단계: 후진 (0.1초)
         print("2️⃣ 후진 이동 (0.1초)")
- 
-        self.motor.set_speeds(
-            -self.config.forward_speed, -self.config.forward_speed
-        )
+
+        self.motor.set_speeds(-self.config.forward_speed, -self.config.forward_speed)
         time.sleep(0.25)
         self.motor.set_speeds(0, 0)
         time.sleep(0.05)  # 안정화
 
-
         # 3단계: 좌회전 (제자리 회전)
         print("3️⃣ 좌회전 시작")
-   
-        self.motor.set_speeds(
-            self.config.high_turn_speed+10,-20
-        )
+
+        self.motor.set_speeds(self.config.high_turn_speed + 10, -20)
         time.sleep(0.3)
         self.motor.set_speeds(0, 0)
 
@@ -200,30 +220,38 @@ class AutonomousDriver:
 
         # 1단계: 좌회전
         print("  1. Avoid by turning left")
-        self.motor.set_speeds(0,self.config.high_turn_speed+20)
+        self.motor.set_speeds(0, self.config.high_turn_speed + 20)
         time.sleep(avoid_time)
 
         # 2단계: 직진으로 지나가기
         print("  2. Go straight to pass")
         self.go_forward()
-        time.sleep(0.5)
+        time.sleep(avoid_time-0.2)
 
         # self.motor.set_speeds(0, 0)
         # time.sleep(0.1)  # 안정화
-
-        self.motor.set_speeds(self.config.high_turn_speed+10,0)
+        print("  3. Turn right to return")
+        self.motor.set_speeds(self.config.high_turn_speed + 10, 0)
         time.sleep(avoid_time)
 
         print("Obstacle avoidance completed!")
 
     def drive_step(self) -> None:
         """한 스텝의 자동 주행 로직 실행"""
-        # 1) 장애물 확인 (설정에 따라 on/off 가능)
+        # 1) 장애물 확인 (설정에 따라 on/off 가능) - 동적 센서 모드
         if self.config.is_ultrasonic_enabled():
-            distance = self.read_distance()
+            # 설정된 센서 모드에 따라 측정 방법 선택
+            if self.config.ultrasonic_mode == "single":
+                distance = self.read_distance()
+            elif self.config.ultrasonic_mode == "fast":
+                distance = self.read_distance_fast()
+            else:  # stable
+                distance = self.read_distance_stable()
+
             if distance < self.config.safe_distance:
+                mode_text = self.config.ultrasonic_mode.upper()
                 print(
-                    f"🚫 장애물 감지 {distance:.1f}cm (안전거리: {self.config.safe_distance}cm)"
+                    f"🚫 장애물 감지 {distance:.1f}cm (안전거리: {self.config.safe_distance}cm) [{mode_text}모드]"
                 )
                 self.avoid_obstacle()
                 return
