@@ -20,7 +20,7 @@ class ConfigurationService:
         self.DEFAULT_HIGH_TURN_SPEED = 60
         self.DEFAULT_SAFE_DISTANCE = 15
         self.DEFAULT_AVOID_TIME = 0.6
-        self.DEFAULT_MOTOR_SLEEP_TIME = 0.5
+        self.DEFAULT_MOTOR_SLEEP_TIME = 0.1
         self.DEFAULT_AUTO_LOOP_INTERVAL = 0.1
         self.DEFAULT_SLIGHT_TURN_THRESHOLD = 1
         self.DEFAULT_TURN_HOLD_SECONDS = 0.3

@@ -96,24 +96,20 @@ class ManualController:
                     -self.config.forward_speed, -self.config.forward_speed
                 )
             elif action == "left":
-                self.motor.set_speeds(self.config.high_turn_speed,-10)                            
+                self.motor.set_speeds(self.config.high_turn_speed, -20)
             elif action == "right":
-                self.motor.set_speeds(0,self.config.high_turn_speed+15) 
-                time.sleep(0.1)               
+                self.motor.set_speeds(0, self.config.high_turn_speed + 10)
             elif action == "slight_left":
-                self.motor.set_speeds(self.config.high_turn_speed-10,0)                
+                self.motor.set_speeds(self.config.high_turn_speed - 20, 0)
             elif action == "slight_right":
-                self.motor.set_speeds(0, self.config.high_turn_speed-10)
+                self.motor.set_speeds(0, self.config.high_turn_speed - 20)
             elif action == "stop":
                 self.motor.set_speeds(0, 0)
 
-            # 지속 시간이 있으면 시간 제한 동작 (회전 동작은 회전 유지 시간 추가 고려)
+            # 지속 시간이 있으면 시간 제한 동작
             if duration_seconds is not None:
                 print(self.get_line_sensor_snapshot(f"[{label} {action}-이전]"))
-                hold_extra = 0.0
-                if action in ("left", "right"):
-                    hold_extra = max(0.0, self.config.get_turn_hold_seconds())
-                time.sleep(duration_seconds + hold_extra)
+                time.sleep(duration_seconds)
                 self.motor.set_speeds(0, 0)
                 print(f"⏹️ {label} {action} 정지")
                 print(self.get_line_sensor_snapshot(f"[{label} {action}-이후]"))
@@ -125,90 +121,65 @@ class ManualController:
         """수동 전진 (설정된 시간 동작 후 자동 정지)"""
         if self.motor and getattr(self.motor, "controller", None):
             self.drive_motion(
-                "forward", self.config.get_manual_pulse_seconds(), label="수동"
+                "forward", self.config.DEFAULT_MOTOR_SLEEP_TIME, label="수동"
             )
         else:
             print(
-                f"Simulation: Forward at {self.config.forward_speed}% for {self.config.get_manual_pulse_seconds()} second"
+                f"Simulation: Forward at {self.config.forward_speed}% for {self.config.DEFAULT_MOTOR_SLEEP_TIME} second"
             )
-            time.sleep(self.config.get_manual_pulse_seconds())
+            time.sleep(self.config.DEFAULT_MOTOR_SLEEP_TIME)
             print("Simulation: Forward stopped")
 
     def manual_backward(self) -> None:
         """수동 후진"""
         if self.motor and getattr(self.motor, "controller", None):
             self.drive_motion(
-                "backward", self.config.get_manual_pulse_seconds(), label="수동"
+                "backward", self.config.DEFAULT_MOTOR_SLEEP_TIME, label="수동"
             )
         else:
             print(
-                f"Simulation: Backward at {self.config.forward_speed}% for {self.config.get_manual_pulse_seconds()} second"
+                f"Simulation: Backward at {self.config.forward_speed}% for {self.config.DEFAULT_MOTOR_SLEEP_TIME} second"
             )
-            time.sleep(self.config.get_manual_pulse_seconds())
+            time.sleep(self.config.DEFAULT_MOTOR_SLEEP_TIME)
             print("Simulation: Backward stopped")
 
     def manual_turn_left(self) -> None:
         """수동 좌회전"""
         if self.motor and getattr(self.motor, "controller", None):
             self.drive_motion(
-                "left", self.config.get_manual_pulse_seconds(), label="수동"
+                "left", self.config.DEFAULT_MOTOR_SLEEP_TIME, label="수동"
             )
         else:
             print(
-                f"Simulation: Turn left at {self.config.high_turn_speed}% for {self.config.get_manual_pulse_seconds()} second"
+                f"Simulation: Turn left at {self.config.high_turn_speed}% for {self.config.DEFAULT_MOTOR_SLEEP_TIME} second"
             )
-            time.sleep(self.config.get_manual_pulse_seconds())
+            time.sleep(self.config.DEFAULT_MOTOR_SLEEP_TIME)
             print("Simulation: Turn left stopped")
 
     def manual_turn_right(self) -> None:
         """수동 우회전"""
         if self.motor and getattr(self.motor, "controller", None):
             self.drive_motion(
-                "right", self.config.get_manual_pulse_seconds(), label="수동"
+                "right", self.config.DEFAULT_MOTOR_SLEEP_TIME, label="수동"
             )
         else:
             print(
-                f"Simulation: Turn right at {self.config.high_turn_speed}% for {self.config.get_manual_pulse_seconds()} second"
+                f"Simulation: Turn right at {self.config.high_turn_speed}% for {self.config.DEFAULT_MOTOR_SLEEP_TIME} second"
             )
-            time.sleep(self.config.get_manual_pulse_seconds())
+            time.sleep(self.config.DEFAULT_MOTOR_SLEEP_TIME)
             print("Simulation: Turn right stopped")
-
-    def manual_slight_left(self) -> None:
-        """수동 약한 좌회전"""
-        if self.motor and getattr(self.motor, "controller", None):
-            self.drive_motion(
-                "slight_left", self.config.get_manual_pulse_seconds(), label="수동"
-            )
-        else:
-            print(
-                f"Simulation: Slight left at {self.config.high_turn_speed}% for {self.config.get_manual_pulse_seconds()} second"
-            )
-            time.sleep(self.config.get_manual_pulse_seconds())
-            print("Simulation: Slight left stopped")
-
-    def manual_slight_right(self) -> None:
-        """수동 약한 우회전"""
-        if self.motor and getattr(self.motor, "controller", None):
-            self.drive_motion(
-                "slight_right", self.config.get_manual_pulse_seconds(), label="수동"
-            )
-        else:
-            print(
-                f"Simulation: Slight right at {self.config.high_turn_speed}% for {self.config.get_manual_pulse_seconds()} second"
-            )
-            time.sleep(self.config.get_manual_pulse_seconds())
-            print("Simulation: Slight right stopped")
 
     def test_steering_sequence(self) -> None:
         """조향 테스트: 좌→우→약좌→약우→전진→후진 순서로 각각 0.5s 동작"""
         sequence = [
-            ("forward", 0.2),
-            ("backward", 0.2),
-            ("stop", 0.0),
-            ("left", 0.2),
-            ("right", 0.2),
-            ("slight_left", 0.3),
-            ("slight_right", 0.3),
+            ("forward", 0.1),
+            ("backward", 0.1),
+            ("left", 0.5),
+            ("right", 0.5),
+            ("forward", 0.1),
+            ("backward", 0.1),
+            ("slight_left", 1),
+            ("slight_right", 1),
             ("stop", 0.0),
         ]
 
