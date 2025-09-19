@@ -38,9 +38,9 @@ scipy>=1.7.0
 
 # ============ 선택적 라이브러리 (Optional) ============
 
-# 영상 처리 (카메라 사용 시)
-# opencv-python>=4.5.0
-# Pillow>=9.0.0
+# 영상 처리 (카메라 사용 시) - free_car_opencv.py에서 사용
+opencv-python>=4.5.0
+Pillow>=9.0.0
 
 # 웹 인터페이스 (원격 제어 시)
 # flask>=2.0.0
