@@ -39,105 +39,31 @@ class CameraVisionService:
         try:
             print(f"🎥 Initializing camera... (ID: {self.camera_id})")
             
-            # Raspberry Pi optimized backends (order matters)
-            backends = [
-                (cv2.CAP_V4L2, "V4L2 (Video4Linux)"),
-                (cv2.CAP_ANY, "Auto-detect"), 
-                (cv2.CAP_GSTREAMER, "GStreamer"),
-                (cv2.CAP_FFMPEG, "FFmpeg")
-            ]
-            
-            success = False
-            for backend_id, backend_name in backends:
-                try:
-                    print(f"  Trying {backend_name}...")
-                    self.cap = cv2.VideoCapture(self.camera_id, backend_id)
-                    
-                    if self.cap.isOpened():
-                        # Raspberry Pi specific optimizations
-                        self._apply_raspberry_pi_optimizations()
-                        
-                        # 해상도 설정
-                        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
-                        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
-                        
-                        # Give camera time to adjust
-                        import time
-                        time.sleep(1.5)
-                        
-                        # Test frame capture
-                        ret, frame = self.cap.read()
-                        if ret and frame is not None and frame.size > 0:
-                            print(f"✅ Success with {backend_name}")
-                            success = True
-                            break
-                        else:
-                            print(f"  ❌ {backend_name}: Cannot read frames")
-                            self.cap.release()
-                    else:
-                        print(f"  ❌ {backend_name}: Cannot open")
-                        
-                except Exception as e:
-                    print(f"  ❌ {backend_name}: Error - {e}")
-                    if self.cap:
-                        self.cap.release()
-            
-            if not success:
-                print("❌ Failed to initialize camera with any backend")
-                self._print_camera_troubleshooting()
+            self.cap = cv2.VideoCapture(self.camera_id)
+            if not self.cap.isOpened():
+                print("❌ Failed to open camera")
                 return False
+            
+            # 해상도 설정
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
             
             # 카메라 속성 설정
             self._apply_camera_settings()
             
-            # Final validation
+            # 초기 프레임 확인
             ret, frame = self.cap.read()
-            if not ret or frame is None or frame.size == 0:
-                print("❌ Camera validation failed")
+            if not ret:
+                print("❌ Failed to read frame from camera")
                 return False
                 
-            actual_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            actual_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            print(f"✅ Camera ready: {actual_width}x{actual_height}")
-            
+            print(f"✅ Camera initialized successfully ({self.width}x{self.height})")
             self.is_initialized = True
             return True
             
         except Exception as e:
             print(f"❌ Camera initialization error: {e}")
             return False
-
-    def _apply_raspberry_pi_optimizations(self) -> None:
-        """라즈베리파이 특화 최적화 설정"""
-        if not self.cap:
-            return
-            
-        try:
-            # 버퍼 크기 최소화 (메모리 절약)
-            self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-            
-            # 프레임 레이트 제한 (성능 향상)
-            self.cap.set(cv2.CAP_PROP_FPS, 15)
-            
-            # 자동 노출 끄기 (안정성 향상)
-            self.cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)  # Manual mode
-            
-        except Exception as e:
-            print(f"⚠️ Raspberry Pi optimization warning: {e}")
-
-    def _print_camera_troubleshooting(self) -> None:
-        """카메라 문제 해결 가이드 출력"""
-        print("\n💡 Camera Troubleshooting Guide:")
-        print("================================")
-        print("1. Check camera connection")
-        print("2. Enable camera: sudo raspi-config -> Interface Options -> Camera")
-        print("3. Increase GPU memory: sudo raspi-config -> Advanced -> Memory Split -> 128")
-        print("4. Load camera module: sudo modprobe bcm2835-v4l2")
-        print("5. Add user to video group: sudo usermod -a -G video $USER")
-        print("6. For USB camera: sudo modprobe uvcvideo")
-        print("7. Reboot system: sudo reboot")
-        print("8. Run camera test: python3 camera_test.py")
-        print("9. Run fix script: bash fix_camera.sh")
 
     def _apply_camera_settings(self) -> None:
         """카메라 속성 설정 적용"""

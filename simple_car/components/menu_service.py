@@ -39,6 +39,16 @@ class MenuService:
             f"기본값: {self.config.DEFAULT_LOW_TURN_SPEED}%)"
         )
         print(
+            f"  ⏱️ 회전 지연:     {self.config.turn_hold_seconds:.2f}초 "
+            f"(범위: {self.config.TURN_HOLD_MIN:.1f}-{self.config.TURN_HOLD_MAX:.1f}초, "
+            f"기본값: {self.config.DEFAULT_TURN_HOLD_SECONDS:.2f}초)"
+        )
+
+        # 초음파 센서 상태 표시
+        ultrasonic_status = "활성화" if self.config.ultrasonic_enabled else "비활성화"
+        ultrasonic_icon = "🔊" if self.config.ultrasonic_enabled else "🔇"
+        print(f"  {ultrasonic_icon} 초음파 센서:   {ultrasonic_status} (u키로 토글)")
+        print(
             f"  ⚡ 강한 회전:     {self.config.high_turn_speed:3d}% "
             f"(범위: {self.config.SPEED_MIN}-{self.config.SPEED_MAX}%, "
             f"기본값: {self.config.DEFAULT_HIGH_TURN_SPEED}%)"
@@ -76,7 +86,7 @@ class MenuService:
 
         print("\n⚙️ 속도 조절 (실시간, Enter 키 불필요):")
         print("  1,2: 전진 속도 -10%/+10%")
-        print("  3,4: 약한 회전 속도 -10%/+10%")
+        print("  3,4: 회전 지연 시간 +0.05초/-0.05초")
         print("  5,6: 강한 회전 속도 -10%/+10%")
         print("  7,8: 안전 거리 -5cm/+5cm")
         print("  9,0: 회피 시간 -0.1s/+0.1s")
@@ -87,6 +97,8 @@ class MenuService:
         print("  x: 라인 센서 상태 실시간 확인")
         print("  z: 거리 센서 상태 확인")
         print("  t: 조향 테스트 시퀀스 실행")
+        print("  u: 초음파 센서 on/off 토글")
+        print("  h: 종합 도움말 표시 (최신 기능 포함)")
 
         print("\n💡 팁:")
         print("  • 대부분의 키는 Enter 없이 즉시 반응, 자동 시작은 Enter 키")

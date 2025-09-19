@@ -86,54 +86,23 @@ class OpenCVCarController:
         """서비스 준비 상태 확인"""
         try:
             # 카메라 초기화
-            print("🔧 Attempting camera initialization...")
             camera_ready = self.camera_service.initialize_camera()
             if not camera_ready:
-                print("❌ Camera initialization failed")
-                print("🔍 Checking available cameras...")
-                self._check_available_cameras()
-                print("⚠️ Running in simulation mode without camera")
-                camera_ready = False  # Continue without camera
+                print("❌ 카메라 초기화 실패")
+                return False
 
             # 하드웨어 연결 상태 확인
             hw_motor = getattr(self.motor_service, "controller", None) is not None
             hw_ultra = getattr(self.ultrasonic_service, "sensor", None) is not None
 
-            camera_status = "✅" if camera_ready else "❌(simulation)"
-            print(f"Hardware(camera={camera_status}, motor={hw_motor}, ultrasonic={hw_ultra}) ready")
-            
-            if camera_ready:
-                print(f"📷 Camera: {self.camera_service.width}x{self.camera_service.height}")
-            else:
-                print("📷 Camera: Simulation mode (no physical camera)")
-                
+            print(f"Hardware(camera=✅, motor={hw_motor}, ultrasonic={hw_ultra}) ready")
+            print(f"📷 Camera: {self.camera_service.width}x{self.camera_service.height}")
             print(f"🎯 Detection: Yellow line tracking with histogram analysis")
             
-            return True  # Continue even without camera
+            return True
         except Exception as e:
             print(f"Hardware setup error: {e}")
             return False
-    
-    def _check_available_cameras(self) -> None:
-        """사용 가능한 카메라 확인"""
-        import cv2
-        print("📹 Scanning for available cameras...")
-        available_cameras = []
-        
-        for i in range(5):  # Check cameras 0-4
-            cap = cv2.VideoCapture(i)
-            if cap.isOpened():
-                available_cameras.append(i)
-                cap.release()
-        
-        if available_cameras:
-            print(f"📹 Available cameras: {available_cameras}")
-        else:
-            print("📹 No cameras detected")
-            print("💡 Tips:")
-            print("   - Check if camera is connected")
-            print("   - Try: sudo modprobe uvcvideo")
-            print("   - Check permissions: sudo usermod -a -G video $USER")
 
     def handle_keyboard_input(self) -> None:
         """키보드 입력 처리 스레드"""
@@ -168,14 +137,14 @@ class OpenCVCarController:
 
                 # 알 수 없는 키
                 if key and key.isprintable():
-                    print(f"\n❌ Unknown command: '{key}'. Press 'h' for help")
+                    print(f"\n❌ 알 수 없는 명령: '{key}'. 'h' 키로 도움말 확인")
 
             except KeyboardInterrupt:
-                print("\nCtrl+C detected - Safe shutdown in progress...")
+                print("\nCtrl+C 감지 - 안전 종료 중...")
                 self.running = False
                 break
             except Exception as e:
-                print(f"\nError: {e}")
+                print(f"\n오류: {e}")
                 time.sleep(0.1)
 
     def _handle_control_keys(self, key: str) -> bool:
@@ -200,18 +169,18 @@ class OpenCVCarController:
                 print("\nAlready in autonomous mode")
             return False
         elif key in ["p", "space"]:
-            print("\n🛑 Emergency stop - All operations halted")
+            print("\n🛑 즉시 정지 - 모든 동작 중단")
             self.manual_controller.emergency_stop()
             if self.autonomous_mode:
                 self.autonomous_mode = False
                 self.manual_control_active = True
-                print("Autonomous mode → Manual mode switched")
+                print("자동 모드 → 수동 모드로 전환")
             else:
                 self.manual_control_active = True
-                print("All operations stopped in manual mode")
+                print("수동 모드에서 모든 동작 정지")
             return False
         elif key == "\x03":  # Ctrl+C
-            print("\nCtrl+C detected - Safe shutdown in progress...")
+            print("\nCtrl+C 감지 - 안전 종료 중...")
             self.running = False
             return False
         return True
@@ -255,10 +224,10 @@ class OpenCVCarController:
     def _handle_debug_keys(self, key: str) -> bool:
         """디버깅 키 처리 (기존 + 카메라)"""
         if key == "z":
-            print("\n🔍 Checking distance sensor status...")
+            print("\n🔍 거리 센서 상태 확인 중...")
             self.sensor_monitor.show_distance_sensor_status(5)
         elif key == "t":
-            print("\n🧪 Starting steering test sequence")
+            print("\n🧪 조향 테스트 시퀀스 시작")
             self.manual_controller.test_steering_sequence()
         else:
             return True  # 처리하지 않은 키
@@ -270,25 +239,25 @@ class OpenCVCarController:
             # 비전 디버그 모드 토글
             self.debug_mode = not self.debug_mode
             self.auto_driver.set_debug_mode(self.debug_mode, self.debug_mode)
-            print(f"\n📷 Vision debug mode: {'ON' if self.debug_mode else 'OFF'}")
+            print(f"\n📷 비전 디버그 모드: {'ON' if self.debug_mode else 'OFF'}")
             if self.debug_mode:
-                print("  - Processing time, histogram data output")
-                print("  - Detection result visualization in OpenCV windows")
+                print("  - 처리 시간, 히스토그램 데이터 출력")
+                print("  - OpenCV 윈도우에서 감지 결과 시각화")
             return False
         elif key == "c":
             # 카메라 상태 정보 출력
-            print("\n📷 Camera system status:")
+            print("\n📷 카메라 시스템 상태:")
             camera_info = self.camera_service.get_camera_info()
             for k, v in camera_info.items():
                 print(f"  {k}: {v}")
             
             detector_info = self.detector_service.get_detection_info()
-            print("\n🎯 Detection settings:")
+            print("\n🎯 감지 설정:")
             for k, v in detector_info.items():
                 print(f"  {k}: {v}")
                 
             status_info = self.auto_driver.get_status_info()
-            print("\n🚗 Driving status:")
+            print("\n🚗 주행 상태:")
             for k, v in status_info.items():
                 print(f"  {k}: {v}")
             return False
@@ -297,14 +266,14 @@ class OpenCVCarController:
             threshold = getattr(self.detector_service, 'direction_threshold', 50000)
             threshold -= 10000
             self.detector_service.direction_threshold = max(1000, threshold)
-            print(f"\n🎯 Direction threshold: {self.detector_service.direction_threshold}")
+            print(f"\n🎯 방향 판단 임계값: {self.detector_service.direction_threshold}")
             return False
         elif key == "m":
             # 노란색 감지 임계값 증가 (예시)
             threshold = getattr(self.detector_service, 'direction_threshold', 50000)
             threshold += 10000
             self.detector_service.direction_threshold = min(200000, threshold)
-            print(f"\n🎯 Direction threshold: {self.detector_service.direction_threshold}")
+            print(f"\n🎯 방향 판단 임계값: {self.detector_service.direction_threshold}")
             return False
         else:
             return True  # 처리하지 않은 키
@@ -318,22 +287,22 @@ class OpenCVCarController:
         ):
             self.manual_control_active = True
             if key in ["w", "up"]:
-                print("\n🔼 Manual forward")
+                print("\n🔼 수동 전진")
                 self.manual_controller.manual_forward()
             elif key in ["s", "down"]:
-                print("\n🔽 Manual backward")
+                print("\n🔽 수동 후진")
                 self.manual_controller.manual_backward()
             elif key in ["a", "left"]:
-                print("\n◀️ Manual left turn")
+                print("\n◀️ 수동 좌회전")
                 self.manual_controller.manual_turn_left()
             elif key in ["d", "right"]:
-                print("\n▶️ Manual right turn")
+                print("\n▶️ 수동 우회전")
                 self.manual_controller.manual_turn_right()
             elif key in ["k"]:
-                print("\n▶️ Manual slight right turn")
+                print("\n▶️ 수동 약간 우회전")
                 self.manual_controller.manual_slight_right()
             elif key in ["j"]:
-                print("\n◀️ Manual slight left turn")
+                print("\n◀️ 수동 약간 좌회전")
                 self.manual_controller.manual_slight_left()
             return False
         return True
@@ -395,11 +364,11 @@ class OpenCVCarController:
     def _cleanup_hardware(self) -> None:
         """하드웨어 서비스 정리"""
         services = [
-            (self.motor_service, "Motor Controller"),
-            (self.ultrasonic_service, "Ultrasonic Sensor"),
-            (self.camera_service, "Camera Service"),
-            (self.detector_service, "Line Detector"),
-            (self.auto_driver, "Autonomous Driving System"),
+            (self.motor_service, "모터 컨트롤러"),
+            (self.ultrasonic_service, "초음파 센서"),
+            (self.camera_service, "카메라 서비스"),
+            (self.detector_service, "라인 감지기"),
+            (self.auto_driver, "자율주행 시스템"),
         ]
 
         for service, name in services:
@@ -412,12 +381,12 @@ class OpenCVCarController:
 
     def run(self) -> None:
         """메인 실행 함수"""
-        print("OpenCV Camera-based Autonomous Car - Yellow Line Tracking")
+        print("OpenCV Camera-based Autonomous Car - 카메라 기반 노란선 추적 주행")
         print("=" * 70)
-        print("🛣️ Road: Black / Line: Yellow")
-        print("📷 Sensor: OpenCV Camera (320x240)")
-        print("🎯 Functions: Yellow line tracking + Obstacle avoidance + Keyboard control")
-        print("🔧 Algorithm: Histogram analysis-based direction detection")
+        print("🛣️ 도로: 검정색 / 라인: 노란색")
+        print("📷 센서: OpenCV 카메라 (320x240)")
+        print("🎯 기능: 노란선 추적 + 장애물 회피 + 키보드 제어")
+        print("🔧 알고리즘: 히스토그램 분석 기반 방향 판단")
         print("=" * 70)
 
         settings = self.config.get_current_settings()
@@ -464,17 +433,17 @@ class OpenCVCarController:
                         cv2.waitKey(1)  # OpenCV 윈도우 업데이트
                         
                 except KeyboardInterrupt:
-                    print("\n\n⚠️ Ctrl+C detected - Emergency stop in progress...")
+                    print("\n\n⚠️ Ctrl+C 감지 - 긴급 정지 중...")
                     self.manual_controller.emergency_stop()
                     self.running = False
                     break
 
         except KeyboardInterrupt:
-            print("\n\n⚠️ Ctrl+C detected - Safe shutdown in progress...")
+            print("\n\n⚠️ Ctrl+C 감지 - 안전 종료 중...")
             self.manual_controller.emergency_stop()
             self.running = False
         except Exception as e:
-            print(f"\n❌ Error occurred: {e}")
+            print(f"\n❌ 오류 발생: {e}")
             self.manual_controller.emergency_stop()
             self.running = False
         finally:

@@ -192,7 +192,7 @@ class CameraAutonomousDriver:
             # 1) 장애물 확인 (선택적 활성화)
             # distance = self.read_distance()
             # if distance < self.config.safe_distance:
-            #     print(f"🚫 Obstacle detected {distance}cm (safe distance: {self.config.safe_distance}cm)")
+            #     print(f"🚫 장애물 감지 {distance}cm (안전거리: {self.config.safe_distance}cm)")
             #     self.avoid_obstacle()
             #     return
 

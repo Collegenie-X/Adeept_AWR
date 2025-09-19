@@ -53,15 +53,11 @@ class UltraSimpleCarController:
 
         # 기능별 컨트롤러
         self.menu = MenuService(self.config)
+        self.auto_driver = AutonomousDriver(
+            self.motor_service, self.line_service, self.ultrasonic_service, self.config
+        )
         self.manual_controller = ManualController(
             self.motor_service, self.line_service, self.config
-        )
-        self.auto_driver = AutonomousDriver(
-            self.motor_service,
-            self.line_service,
-            self.ultrasonic_service,
-            self.config,
-            manual_controller=self.manual_controller,
         )
         self.sensor_monitor = SensorMonitor(
             self.line_service, self.ultrasonic_service, self.config
@@ -173,11 +169,11 @@ class UltraSimpleCarController:
             speed = self.config.adjust_forward_speed(10)
             print(f"\n✓ 전진 속도: {speed}%")
         elif key == "3":
-            turn_time = self.config.adjust_turn_hold_time(1)  # +0.05초
-            print(f"\n✓ 회전 지연 시간: {turn_time:.2f}초 (+0.05초)")
+            speed = self.config.adjust_low_turn_speed(-10)
+            print(f"\n✓ 약한 회전 속도: {speed}%")
         elif key == "4":
-            turn_time = self.config.adjust_turn_hold_time(-1)  # -0.05초
-            print(f"\n✓ 회전 지연 시간: {turn_time:.2f}초 (-0.05초)")
+            speed = self.config.adjust_low_turn_speed(10)
+            print(f"\n✓ 약한 회전 속도: {speed}%")
         elif key == "5":
             speed = self.config.adjust_high_turn_speed(-10)
             print(f"\n✓ 강한 회전 속도: {speed}%")
@@ -196,14 +192,6 @@ class UltraSimpleCarController:
         elif key == "0":
             time_val = self.config.adjust_avoid_time(1)
             print(f"\n✓ 회피 시간: {time_val:.1f}s")
-        elif key == "<":
-            # 수동 펄스 시간 +0.1s
-            pulse = self.config.adjust_manual_pulse_time(1)
-            print(f"\n✓ 수동 펄스 시간: {pulse:.1f}s")
-        elif key == ">":
-            # 수동 펄스 시간 -0.1s
-            pulse = self.config.adjust_manual_pulse_time(-1)
-            print(f"\n✓ 수동 펄스 시간: {pulse:.1f}s")
         else:
             return True  # 처리하지 않은 키
         return False
@@ -219,15 +207,6 @@ class UltraSimpleCarController:
         elif key == "t":
             print("\n🧪 조향 테스트 시퀀스 시작")
             self.manual_controller.test_steering_sequence()
-        elif key == "u":
-            # 초음파 센서 on/off 토글
-            status = self.config.toggle_ultrasonic_sensor()
-            status_text = "활성화" if status else "비활성화"
-            status_icon = "🔊" if status else "🔇"
-            print(f"\n{status_icon} 초음파 센서: {status_text}")
-        elif key == "h":
-            # 종합 도움말 표시
-            self.show_comprehensive_help()
         else:
             return True  # 처리하지 않은 키
         return False
@@ -235,7 +214,7 @@ class UltraSimpleCarController:
     def _handle_manual_movement_keys(self, key: str) -> bool:
         """수동 이동 키 처리 (w/a/s/d, 화살표)"""
         if (
-            key in ["w", "a", "d", "s", "j", "k", "up", "down", "left", "right"]
+            key in ["w", "a", "d", "s", "up", "down", "left", "right"]
             and not self.autonomous_mode
         ):
             self.manual_control_active = True
@@ -251,12 +230,6 @@ class UltraSimpleCarController:
             elif key in ["d", "right"]:
                 print("\n▶️ 수동 우회전")
                 self.manual_controller.manual_turn_right()
-            elif key in ["k"]:
-                print("\n▶️ 수동 우회전")
-                self.manual_controller.manual_slight_right()
-            elif key in ["j"]:
-                print("\n▶️ 수동 좌회전")
-                self.manual_controller.manual_slight_left()
             return False
         return True
 
@@ -293,101 +266,6 @@ class UltraSimpleCarController:
             print(f"⚠️ 종료 중 오류: {e}")
         finally:
             print("\n")
-
-    def show_comprehensive_help(self) -> None:
-        """종합 도움말 표시 - 모든 최신 기능 포함"""
-        print("\n" + "=" * 80)
-        print("🆘 Ultra Simple Car - 종합 도움말 (최신 업데이트 2024)")
-        print("=" * 80)
-
-        print("\n🚗 기본 수동 조작:")
-        print("  w/↑    : 전진 (설정 속도로)")
-        print("  s/↓    : 후진")
-        print("  a/←    : 좌회전 (강한 회전)")
-        print("  d/→    : 우회전 (강한 회전)")
-        print("  j      : 약한 좌회전")
-        print("  k      : 약한 우회전")
-        print("  스페이스: 긴급 정지")
-
-        print("\n⚙️ 실시간 설정 조절 (Enter 불필요):")
-        print("  1,2    : 전진 속도 -10%/+10%")
-        print("  3,4    : 회전 지연 시간 -0.05초/+0.05초 ⭐ 새기능")
-        print("  5,6    : 강한 회전 속도 -10%/+10%")
-        print("  7,8    : 안전 거리 -5cm/+5cm")
-        print("  9,0    : 회피 시간 -0.1초/+0.1초")
-        print("  [,]    : 수동 펄스 시간 -0.1초/+0.1초")
-
-        print("\n🤖 자율주행 모드:")
-        print("  Enter  : 자율주행 시작/정지")
-        print("  자율주행 중에도 1-0키로 실시간 설정 조절 가능")
-
-        print("\n🔧 고급 기능:")
-        print("  u      : 초음파 센서 on/off 토글 ⭐ 새기능")
-        current_ultrasonic = (
-            "🔊 활성화" if self.config.ultrasonic_enabled else "🔇 비활성화"
-        )
-        print(f"           (현재 상태: {current_ultrasonic})")
-        print("  m      : 모터 캘리브레이션 (직진 보정)")
-        print("  r      : 모든 설정 기본값으로 초기화")
-
-        print("\n🔍 센서 모니터링:")
-        print("  x      : 라인 센서 실시간 상태 확인")
-        print("  z      : 거리 센서 실시간 상태 확인")
-
-        print("\n🧪 테스트 및 디버깅:")
-        print("  t      : 조향 테스트 시퀀스")
-        print("  기타 테스트 함수들은 manual_controller에서 직접 호출")
-
-        print("\n✨ 최신 추가 기능들:")
-        print("  🎯 적응형 라인 팔로잉:")
-        print("     - 라인 위치에 따른 4단계 회전 강도 자동 조절")
-        print("     - 미세조정(0.08초) → 약함(0.12초) → 보통(0.18초) → 강함(0.25초)")
-
-        print("  🛡️ 장애물 회피 개선:")
-        print("     - 초음파 센서 40cm 조기 감지")
-        print("     - 정지(0.1초) → 후진(0.1초) → 좌회전 안정적 시퀀스")
-        print("     - 111 패턴(모든 센서) 처리로 선 이탈 방지")
-
-        print("  ⏱️ 회전 시간 미세 조정:")
-        print("     - 3,4키로 0.05초 단위 조절 (0.1~0.5초 범위)")
-        print("     - 자율주행 중 실시간 적용")
-
-        print("  🔊/🔇 초음파 센서 토글:")
-        print("     - u키로 장애물 감지 기능 on/off")
-        print("     - 성능 최적화 및 트랙별 맞춤 설정")
-
-        print("\n📊 현재 설정 요약:")
-        settings = self.config.get_current_settings()
-        print(f"  전진 속도: {settings['forward_speed']}%")
-        print(f"  회전 지연: {settings['turn_hold_seconds']:.2f}초")
-        print(f"  안전 거리: {settings['safe_distance']}cm")
-        ultrasonic_text = "활성화" if settings["ultrasonic_enabled"] else "비활성화"
-        print(f"  초음파 센서: {ultrasonic_text}")
-
-        # 변경된 설정이 있으면 표시
-        changes = self.config.get_changed_settings()
-        if changes:
-            print("\n📝 기본값에서 변경된 설정:")
-            for change in changes:
-                print(f"  • {change}")
-        else:
-            print("\n📝 모든 설정이 기본값 상태")
-
-        print("\n💡 주요 팁:")
-        print("  • 자율주행 중에도 대부분의 설정을 실시간 조절 가능")
-        print("  • 트랙이 단순하면 u키로 초음파 센서 off → 빠른 주행")
-        print("  • 회전이 부족/과다하면 3,4키로 회전 시간 미세 조정")
-        print("  • 111 패턴에서 선 이탈시 자동으로 안정적 처리 수행")
-
-        print("\n🆘 문제해결:")
-        print("  • 직진 안됨 → m키로 모터 캘리브레이션")
-        print("  • 회전 부족/과다 → 3,4키로 회전 시간 조절")
-        print("  • 장애물 오감지 → u키로 초음파 센서 off")
-        print("  • 설정 꼬임 → r키로 전체 초기화")
-
-        print("\n" + "=" * 80)
-        print("🎮 언제든 h키를 눌러 이 도움말을 다시 볼 수 있습니다!")
-        print("=" * 80)
 
     def _cleanup_hardware(self) -> None:
         """하드웨어 서비스 정리"""

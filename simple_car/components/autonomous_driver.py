@@ -110,9 +110,7 @@ class AutonomousDriver:
             # )
             self.manual.drive_motion("forward")
         else:
-            self.motor.set_speeds(
-                self.config.forward_speed, self.config.forward_speed
-            )
+            self.motor.set_speeds(self.config.forward_speed, self.config.forward_speed)
         print(f"Forward at {self.config.forward_speed}%")
 
     def turn_left(self) -> None:
@@ -122,7 +120,7 @@ class AutonomousDriver:
         else:
             self.motor.set_speeds(self.config.high_turn_speed, -10)
         print("Turn left")
-        time.sleep(self.config.DEFAULT_TURN_HOLD_SECONDS)
+        time.sleep(self.config.get_turn_hold_seconds())
         self.last_turn_direction = "left"
         self.turn_recovery_count = 0
 
@@ -133,8 +131,45 @@ class AutonomousDriver:
         else:
             self.motor.set_speeds(0, self.config.high_turn_speed + 10)
         print("Turn right")
-        time.sleep(self.config.DEFAULT_TURN_HOLD_SECONDS)
+        time.sleep(self.config.get_turn_hold_seconds())
         self.last_turn_direction = "right"
+        self.turn_recovery_count = 0
+
+    def handle_all_sensors_detected(self) -> None:
+        """모든 센서 감지시 안정적 처리: 정지 → 후진 → 좌회전"""
+        print("⚠️ 모든 센서 감지 - 안정적 처리 시작")
+
+        # 1단계: 확실한 정지 (0.1초)
+        print("1️⃣ 완전 정지 (0.1초)")
+  
+        self.motor.set_speeds(0, 0)
+        time.sleep(0.1)
+
+
+        # 2단계: 후진 (0.1초)
+        print("2️⃣ 후진 이동 (0.1초)")
+ 
+        self.motor.set_speeds(
+            -self.config.forward_speed, -self.config.forward_speed
+        )
+        time.sleep(0.25)
+        self.motor.set_speeds(0, 0)
+        time.sleep(0.05)  # 안정화
+
+
+        # 3단계: 좌회전 (제자리 회전)
+        print("3️⃣ 좌회전 시작")
+   
+        self.motor.set_speeds(
+            self.config.high_turn_speed+10,-20
+        )
+        time.sleep(0.3)
+        self.motor.set_speeds(0, 0)
+
+        time.sleep(0.05)  # 안정화
+        print("✅ 모든 센서 감지 처리 완료")
+
+        self.last_turn_direction = "left"
         self.turn_recovery_count = 0
 
     def slight_left(self) -> None:
@@ -160,35 +195,41 @@ class AutonomousDriver:
         avoid_time = self.config.get_avoid_time_seconds()
         print(f"Obstacle avoidance started! (avoid time: {avoid_time:.1f}s)")
 
+        self.motor.set_speeds(0, 0)
+        time.sleep(0.2)  # 안정화
+
         # 1단계: 좌회전
         print("  1. Avoid by turning left")
-        self.turn_left()
+        self.motor.set_speeds(0,self.config.high_turn_speed+20)
         time.sleep(avoid_time)
 
         # 2단계: 직진으로 지나가기
         print("  2. Go straight to pass")
         self.go_forward()
-        time.sleep(avoid_time)
+        time.sleep(0.5)
 
-        # 3단계: 우회전으로 원래 방향
-        print("  3. Turn right to return")
-        self.turn_right()
+        # self.motor.set_speeds(0, 0)
+        # time.sleep(0.1)  # 안정화
+
+        self.motor.set_speeds(self.config.high_turn_speed+10,0)
         time.sleep(avoid_time)
 
         print("Obstacle avoidance completed!")
 
     def drive_step(self) -> None:
         """한 스텝의 자동 주행 로직 실행"""
-        # 1) 장애물 확인 (주석 처리되어 있지만 필요시 활성화)
-        # distance = self.read_distance()
-        # if distance < self.config.safe_distance:
-        #     print(f"🚫 장애물 감지 {distance}cm (안전거리: {self.config.safe_distance}cm)")
-        #     self.avoid_obstacle()
-        #     return
+        # 1) 장애물 확인 (설정에 따라 on/off 가능)
+        if self.config.is_ultrasonic_enabled():
+            distance = self.read_distance()
+            if distance < self.config.safe_distance:
+                print(
+                    f"🚫 장애물 감지 {distance:.1f}cm (안전거리: {self.config.safe_distance}cm)"
+                )
+                self.avoid_obstacle()
+                return
 
         # 2) 차선 유지 로직
         # 먼저 원시 센서 패턴을 확인하여 좌+중앙/우+중앙 조합을 빠르게 처리
-        raw_checked = False
         if self.line and getattr(self.line, "controller", None):
             try:
                 info = self.line.get_position_info()
@@ -201,13 +242,15 @@ class AutonomousDriver:
                     # 좌+중앙 감지 → 약한 좌회전
                     if left0 and mid0 and not right0:
                         print("↙️ 좌+중앙 → 약좌")
-                        self.slight_left()
+                        self.turn_left()
+                        time.sleep(0.2)
                         return
 
                     # 우+중앙 감지 → 약한 우회전
                     if right0 and mid0 and not left0:
                         print("↘️ 우+중앙 → 약우")
-                        self.slight_right()
+                        self.turn_right()
+                        time.sleep(0.2)
                         return
 
                     raw_checked = True
@@ -228,20 +271,19 @@ class AutonomousDriver:
         self._cnt_both = self._cnt_both + 1 if status == "both_lines" else 0
         self._cnt_none = self._cnt_none + 1 if status == "none" else 0
 
-
         # Early return 패턴으로 동작 결정
         if status == "left_line":
             # 직진하면 좌측 차선을 밟으므로 우측으로 이동
             if self._cnt_left >= self.config.DEFAULT_SLIGHT_TURN_THRESHOLD:
                 self.turn_right()
-                
+
             else:
                 self.turn_right()
             return
 
         if status == "right_line":
             if self._cnt_right >= self.config.DEFAULT_SLIGHT_TURN_THRESHOLD:
-                self.turn_left()  
+                self.turn_left()
             else:
                 self.turn_left()
             return
@@ -252,12 +294,12 @@ class AutonomousDriver:
             return
 
         if status == "both_lines":
-            # 요구사항: 모두 인식 시 좌로 동작
-            self.turn_left()
+            # 요구사항: 모두 인식 시 안정적 처리 (정지→후진→좌회전)
+            self.handle_all_sensors_detected()
             return
 
         # none: 둘 다 감지되지 않음 → 직진 유지
         self.go_forward()
-        # time.sleep(self.config.DEFAULT_FORWARD_SPEED)
+        # time.sleep(self.config.DEFAULT_MOTOR_SLEEP_TIME)
         self.last_turn_direction = "none"
         self.turn_recovery_count = 0
