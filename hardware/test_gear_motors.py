@@ -17,7 +17,7 @@ import tty
 import termios
 
 # BCM 모드 GPIO 핀 정의 (업데이트된 핀아웃)
-ENA, ENB = 26, 17  # PWM 활성화 핀
+ENA, ENB = 21, 17  # PWM 활성화 핀
 A1, A2 = 19, 21  # 모터A(우측) 방향 제어핀 - A1을 GPIO 19로 수정
 B1, B2 = 27, 18  # 모터B(좌측) 방향 제어핀
 
